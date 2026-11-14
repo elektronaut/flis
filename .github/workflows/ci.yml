@@ -43,7 +43,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --locked
-      - uses: taiki-e/install-action@v2.88.1
+      - uses: taiki-e/install-action@v2.90.3
         with:
           tool: cargo-nextest@0.9.146
       # Each test runs in its own process; .config/nextest.toml fails one
