@@ -6,5 +6,6 @@ pub mod context;
 pub mod db;
 pub mod error;
 pub mod model;
+pub mod rank;
 pub mod search;
 pub mod store;
