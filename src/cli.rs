@@ -7,6 +7,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crate::clock;
 use crate::commands::add::AddInput;
 use crate::commands::edit::EditArgs;
+use crate::commands::list::{ListArgs, Sort};
 use crate::commands::seen::SeenArgs;
 use crate::commands::{self, Context};
 use crate::db;
@@ -94,6 +95,15 @@ pub enum Command {
     Resolve(ResolveArgs),
     /// Make a resolved or accepted entry open again
     Reopen(IdArg),
+    /// List entries, ranked by how much they cost recently
+    #[command(
+        long_about = "List entries, by default open ones, ranked: silent entries first, then by \
+        score = weight × days × projects, then the most recently seen. Weight counts each occurrence \
+        as 1 (minor), 3 (major) or 5 (blocker); days and projects are distinct counts. Only \
+        occurrences inside --since count. Open entries with a ref (reported upstream, waiting on a \
+        fix) are listed separately below the rest."
+    )]
+    List(ListCommand),
 }
 
 fn parse_id(raw: &str) -> std::result::Result<i64, String> {
@@ -292,6 +302,28 @@ pub struct ResolveArgs {
     pub note: Option<String>,
 }
 
+#[derive(Debug, Args)]
+pub struct ListCommand {
+    /// Only entries in this status
+    #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
+    pub status: StatusFilter,
+    /// Only entries seen in this project
+    #[arg(long, value_name = "P")]
+    pub project: Option<String>,
+    /// Only entries with this subject
+    #[arg(long, value_name = "WORD")]
+    pub subject: Option<String>,
+    /// The window that counts: 90d, 2w, 36h, a date (2026-08-01) or a timestamp
+    #[arg(long, default_value = "90d", value_name = "D")]
+    pub since: String,
+    /// Order of the entries
+    #[arg(long, value_enum, default_value_t = Sort::Rank)]
+    pub sort: Sort,
+    /// Most entries to show in each group
+    #[arg(long, default_value_t = 25, value_name = "N")]
+    pub limit: usize,
+}
+
 /// Runs flis with the given arguments and returns the exit code.
 pub fn run(args: Vec<OsString>) -> i32 {
     let wants_json = args.iter().skip(1).any(|arg| arg == "--json");
@@ -438,5 +470,16 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
             args.note.as_deref(),
         )?),
         Command::Reopen(args) => output(&commands::resolve::reopen(conn, ctx, args.id)?),
+        Command::List(args) => {
+            let list = ListArgs {
+                status: args.status.status(),
+                project: args.project.as_deref(),
+                subject: args.subject.as_deref(),
+                since: &args.since,
+                sort: args.sort,
+                limit: args.limit,
+            };
+            output(&commands::list::run(conn, ctx, &list)?)
+        }
     }
 }
