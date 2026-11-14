@@ -51,3 +51,177 @@ fn accept_prints_the_reason() {
     assert_eq!(run.code, 2);
     assert_eq!(run.json()["error"]["kind"], "usage");
 }
+
+fn occurrence_count(flis: &Flis, id: i64) -> usize {
+    flis.json(&["show", &id.to_string()])["occurrences"]
+        .as_array()
+        .unwrap()
+        .len()
+}
+
+#[test]
+fn merge_moves_occurrences_and_keeps_the_source_text() {
+    let mut flis = Flis::new();
+    flis.at("2026-11-10T10:00:00Z");
+    let target = flis.add(&[
+        "worktree guard refused compound command",
+        "--project",
+        "acme",
+    ]);
+    flis.at("2026-11-11T10:00:00Z");
+    let source = flis.add(&[
+        "guard says too complex to verify",
+        "--workaround",
+        "run the commands one by one",
+        "--hypothesis",
+        "the guard cannot parse &&",
+        "--subject",
+        "guard",
+        "--note",
+        "while running tests",
+        "--project",
+        "nova",
+    ]);
+    flis.at("2026-11-12T10:00:00Z");
+    flis.run(&["seen", &source.to_string(), "--project", "shop"])
+        .ok();
+    let other = flis.add(&["guard blocked cd && git", "--project", "mono"]);
+
+    flis.at("2026-11-14T12:00:00Z");
+    let report = flis.json(&[
+        "merge",
+        &source.to_string(),
+        &other.to_string(),
+        "--into",
+        &target.to_string(),
+    ]);
+    assert_eq!(report["entry"]["id"], target);
+    assert_eq!(report["merged"][0]["id"], source);
+    assert_eq!(report["merged"][0]["occurrences"], 2);
+    assert_eq!(report["merged"][1]["occurrences"], 1);
+    assert_eq!(report["seen"]["count"], 4);
+    assert_eq!(report["entry"]["updated_at"], "2026-11-14T12:00:00Z");
+
+    let show = flis.json(&["show", &target.to_string()]);
+    let notes: Vec<&str> = show["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|o| o["note"].as_str())
+        .collect();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert_eq!(
+        notes[0],
+        format!(
+            "while running tests\n\nMerged from {source}: guard says too complex to verify\n\
+             workaround: run the commands one by one\nhypothesis: the guard cannot parse &&\n\
+             subject: guard"
+        )
+    );
+    assert_eq!(
+        notes[1],
+        format!("Merged from {other}: guard blocked cd && git")
+    );
+
+    let stub = flis.sql().query_row(
+        "SELECT merged_into, symptom FROM entries WHERE id = ?1",
+        [source],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+    );
+    assert_eq!(
+        stub.unwrap(),
+        (target, "guard says too complex to verify".to_owned())
+    );
+
+    let list = flis.json(&["list"]);
+    let listed: Vec<i64> = list["ranked"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(listed, [target]);
+    assert_eq!(list["ranked"]["entries"][0]["projects"], 4);
+
+    let search = flis.json(&["search", "too complex to verify"]);
+    let hits = search["hits"].as_array().unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0]["id"], target);
+
+    let show = flis.json(&["show", &source.to_string()]);
+    assert_eq!(show["entry"]["id"], target);
+    assert_eq!(show["merged_from"], serde_json::json!([source]));
+
+    let seen = flis.json(&["seen", &other.to_string()]);
+    assert_eq!(seen["entry"]["id"], target);
+    assert_eq!(occurrence_count(&flis, target), 5);
+
+    let text = flis
+        .run(&["merge", &source.to_string(), "--into", &target.to_string()])
+        .ok()
+        .stdout;
+    assert!(
+        text.contains(&format!("{source} was already merged into {target}.")),
+        "{text}"
+    );
+    assert!(text.contains("Nothing to merge"), "{text}");
+}
+
+#[test]
+fn merge_refuses_itself_and_unknown_ids_without_writing() {
+    let flis = Flis::new();
+    let a = flis.add(&["first"]).to_string();
+    let b = flis.add(&["second"]).to_string();
+
+    let run = flis.run(&["merge", &a, "--into", &a]);
+    assert_eq!(run.code, 2);
+    assert!(run.stderr.contains("into itself"), "{}", run.stderr);
+
+    assert_eq!(flis.run(&["merge", &a, "99", "--into", &b]).code, 3);
+    assert_eq!(flis.run(&["merge", &a, "--into", "99"]).code, 3);
+    assert_eq!(flis.run(&["merge", "--into", &b]).code, 2);
+    assert_eq!(occurrence_count(&flis, 1), 1);
+    assert_eq!(occurrence_count(&flis, 2), 1);
+    assert!(
+        flis.json(&["show", &a])["merged_from"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn merge_into_a_stub_follows_it_and_chains_resolve() {
+    let flis = Flis::new();
+    let a = flis.add(&["alpha failure"]).to_string();
+    let b = flis.add(&["beta failure"]).to_string();
+    let c = flis.add(&["gamma failure"]).to_string();
+    let d = flis.add(&["delta failure"]).to_string();
+
+    flis.run(&["merge", &a, "--into", &b]).ok();
+    let report = flis.json(&["merge", &b, "--into", &c]);
+    assert_eq!(report["merged"][0]["occurrences"], 2);
+
+    let show = flis.json(&["show", &a]);
+    assert_eq!(show["entry"]["id"].to_string(), c);
+    assert_eq!(show["merged_from"], serde_json::json!([1, 2]));
+
+    let report = flis.json(&["merge", &d, "--into", &a]);
+    assert_eq!(report["entry"]["id"].to_string(), c);
+    assert_eq!(report["merged_from"], serde_json::json!([1, 2]));
+    assert_eq!(report["seen"]["count"], 4);
+
+    let run = flis.run(&["merge", &c, "--into", &a]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr.contains(&format!("{a} was merged into {c}")),
+        "{}",
+        run.stderr
+    );
+
+    let text = flis.run(&["list"]).ok().stdout;
+    assert!(text.contains("gamma failure"), "{text}");
+    for gone in ["alpha", "beta", "delta"] {
+        assert!(!text.contains(gone), "{text}");
+    }
+}

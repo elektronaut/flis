@@ -161,6 +161,55 @@ pub fn occurrences_since(conn: &Connection, since: &str) -> Result<Vec<Occurrenc
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+pub fn find_occurrence(conn: &Connection, id: i64) -> Result<Option<Occurrence>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, entry_id, at, project, branch, cwd, agent, session, cost, note
+         FROM occurrences WHERE id = ?1",
+    )?;
+    Ok(stmt.query_row([id], occurrence_from_row).optional()?)
+}
+
+pub fn set_occurrence_note(conn: &Connection, id: i64, note: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE occurrences SET note = ?1 WHERE id = ?2",
+        params![note, id],
+    )?;
+    Ok(())
+}
+
+/// Moves occurrences to another entry: all of `from`'s, or only the given ids.
+pub fn move_occurrences(
+    conn: &Connection,
+    from: i64,
+    to: i64,
+    ids: Option<&[i64]>,
+) -> Result<usize> {
+    match ids {
+        None => Ok(conn.execute(
+            "UPDATE occurrences SET entry_id = ?1 WHERE entry_id = ?2",
+            params![to, from],
+        )?),
+        Some(ids) => {
+            let mut moved = 0;
+            for id in ids {
+                moved += conn.execute(
+                    "UPDATE occurrences SET entry_id = ?1 WHERE entry_id = ?2 AND id = ?3",
+                    params![to, from, id],
+                )?;
+            }
+            Ok(moved)
+        }
+    }
+}
+
+pub fn set_merged_into(conn: &Connection, id: i64, target: i64, now: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE entries SET merged_into = ?1, updated_at = ?2 WHERE id = ?3",
+        params![target, now, id],
+    )?;
+    Ok(())
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Seen {
     pub count: i64,

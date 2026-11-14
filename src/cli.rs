@@ -102,6 +102,15 @@ pub enum Command {
         but leave the review ranking. Meant for the review; `flis reopen <id>` undoes it."
     )]
     Accept(AcceptArgs),
+    /// Merge duplicate entries into one, moving their occurrences
+    #[command(
+        long_about = "Merge duplicate entries into one. The occurrences of each source entry move \
+        to the target, and the source's own fields are appended to the note of its first \
+        occurrence, so nothing is lost. The source stays as a stub that `list`, `search` and \
+        `stats` leave out; its id still leads to the target. There is no undo: repair a wrong \
+        merge with `flis split`."
+    )]
+    Merge(MergeArgs),
     /// List entries, ranked by how much they cost recently
     #[command(
         long_about = "List entries, by default open ones, ranked: silent entries first, then by \
@@ -320,6 +329,16 @@ pub struct AcceptArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct MergeArgs {
+    /// The entries to merge away
+    #[arg(required = true, value_parser = parse_id, value_name = "ID")]
+    pub ids: Vec<i64>,
+    /// The entry that keeps them
+    #[arg(long, value_parser = parse_id, value_name = "ID")]
+    pub into: i64,
+}
+
+#[derive(Debug, Args)]
 pub struct ListCommand {
     /// Only entries in this status
     #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
@@ -490,6 +509,7 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
         Command::Accept(args) => {
             output(&commands::resolve::accept(conn, ctx, args.id, &args.note)?)
         }
+        Command::Merge(args) => output(&commands::merge::run(conn, ctx, &args.ids, args.into)?),
         Command::List(args) => {
             let list = ListArgs {
                 status: args.status.status(),
