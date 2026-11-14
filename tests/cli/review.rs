@@ -225,3 +225,145 @@ fn merge_into_a_stub_follows_it_and_chains_resolve() {
         assert!(!text.contains(gone), "{text}");
     }
 }
+
+#[test]
+fn split_moves_named_occurrences_into_a_new_entry() {
+    let mut flis = Flis::new();
+    let id = flis.add(&[
+        "push rejected",
+        "--subject",
+        "git",
+        "--workaround",
+        "pull first",
+        "--project",
+        "acme",
+    ]);
+    flis.at("2026-11-14T13:00:00Z");
+    for project in ["nova", "shop"] {
+        flis.run(&[
+            "seen",
+            &id.to_string(),
+            "--project",
+            project,
+            "--note",
+            "hook said no",
+        ])
+        .ok();
+    }
+    flis.at("2026-11-14T14:00:00Z");
+    let report = flis.json(&[
+        "split",
+        &id.to_string(),
+        "--occurrence",
+        "o2",
+        "3",
+        "--symptom",
+        "pre-push hook rejected the push",
+    ]);
+    let new_id = report["id"].as_i64().unwrap();
+    assert_eq!(report["moved"], serde_json::json!([2, 3]));
+    assert_eq!(report["seen"]["count"], 2);
+    assert_eq!(report["source_seen"]["count"], 1);
+    assert_eq!(report["entry"]["subject"], "git");
+    assert!(report["entry"]["workaround"].is_null());
+    assert_eq!(report["entry"]["created_at"], "2026-11-14T14:00:00Z");
+
+    let show = flis.json(&["show", &new_id.to_string()]);
+    let projects: Vec<&str> = show["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["project"].as_str().unwrap())
+        .collect();
+    assert_eq!(projects, ["nova", "shop"]);
+    assert_eq!(occurrence_count(&flis, id), 1);
+
+    let search = flis.json(&["search", "hook said no"]);
+    assert_eq!(search["hits"][0]["id"], new_id);
+    assert_eq!(search["hits"].as_array().unwrap().len(), 1);
+
+    let text = flis
+        .run(&[
+            "split",
+            &new_id.to_string(),
+            "--occurrence",
+            "o3",
+            "--symptom",
+            "x",
+        ])
+        .ok()
+        .stdout;
+    assert!(
+        text.starts_with(&format!(
+            "Split o3 from {new_id} into new entry {}. {new_id} keeps 1 occurrence.",
+            new_id + 1
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn split_refuses_to_empty_an_entry_or_take_foreign_occurrences() {
+    let flis = Flis::new();
+    let a = flis.add(&["first"]).to_string();
+    flis.run(&["seen", &a]).ok();
+    flis.add(&["second"]);
+
+    let run = flis.run(&["split", &a, "--occurrence", "o1", "o2", "--symptom", "x"]);
+    assert_eq!(run.code, 2);
+    assert!(run.stderr.contains("every occurrence"), "{}", run.stderr);
+
+    let run = flis.run(&["split", &a, "--occurrence", "o3", "--symptom", "x"]);
+    assert_eq!(run.code, 2);
+    assert!(run.stderr.contains("belongs to entry 2"), "{}", run.stderr);
+
+    assert_eq!(
+        flis.run(&["split", &a, "--occurrence", "o99", "--symptom", "x"])
+            .code,
+        3
+    );
+    assert_eq!(flis.run(&["split", &a, "--occurrence", "o1"]).code, 2);
+    assert_eq!(flis.run(&["split", &a, "--symptom", "x"]).code, 2);
+    assert_eq!(
+        flis.run(&["split", &a, "--occurrence", "p1", "--symptom", "x"])
+            .code,
+        2
+    );
+    assert_eq!(
+        flis.run(&["split", &a, "--occurrence", "o1", "--symptom", " "])
+            .code,
+        2
+    );
+    assert_eq!(occurrence_count(&flis, 1), 2);
+    assert_eq!(
+        flis.json(&["list"])["ranked"]["entries"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn split_repairs_a_wrong_merge() {
+    let flis = Flis::new();
+    let a = flis
+        .add(&["npm install hangs", "--project", "acme"])
+        .to_string();
+    let b = flis
+        .add(&["npm install hangs on a proxy", "--project", "nova"])
+        .to_string();
+    flis.run(&["merge", &b, "--into", &a]).ok();
+    let report = flis.json(&[
+        "split",
+        &b,
+        "--occurrence",
+        "o2",
+        "--symptom",
+        "npm install hangs behind the proxy",
+    ]);
+    assert_eq!(report["source"]["id"].to_string(), a);
+    assert_eq!(report["merged_from"], serde_json::json!([2]));
+    let note = flis.json(&["show", &report["id"].to_string()])["occurrences"][0]["note"].clone();
+    assert_eq!(note, "Merged from 2: npm install hangs on a proxy");
+}

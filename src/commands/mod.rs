@@ -6,6 +6,7 @@ pub mod resolve;
 pub mod search;
 pub mod seen;
 pub mod show;
+pub mod split;
 
 use std::path::PathBuf;
 

@@ -111,6 +111,13 @@ pub enum Command {
         merge with `flis split`."
     )]
     Merge(MergeArgs),
+    /// Move occurrences that have a different cause into a new entry
+    #[command(
+        long_about = "Move occurrences that turn out to have a different cause into a new entry \
+        with the given symptom and the same subject. Occurrence ids are shown by `flis show <id>` \
+        (o117 or 117). The entry keeps at least one occurrence. Also repairs a wrong merge."
+    )]
+    Split(SplitArgs),
     /// List entries, ranked by how much they cost recently
     #[command(
         long_about = "List entries, by default open ones, ranked: silent entries first, then by \
@@ -338,6 +345,28 @@ pub struct MergeArgs {
     pub into: i64,
 }
 
+fn parse_occurrence_id(raw: &str) -> std::result::Result<i64, String> {
+    raw.trim()
+        .trim_start_matches(['o', 'O'])
+        .parse::<i64>()
+        .ok()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| format!("{raw:?} is not an occurrence id (such as o117)"))
+}
+
+#[derive(Debug, Args)]
+pub struct SplitArgs {
+    /// Entry id
+    #[arg(value_parser = parse_id)]
+    pub id: i64,
+    /// An occurrence to move, such as o117; repeat it or give several
+    #[arg(long, required = true, num_args = 1.., value_parser = parse_occurrence_id, value_name = "OID")]
+    pub occurrence: Vec<i64>,
+    /// What happened in the moved occurrences
+    #[arg(long, value_name = "TEXT")]
+    pub symptom: String,
+}
+
 #[derive(Debug, Args)]
 pub struct ListCommand {
     /// Only entries in this status
@@ -510,6 +539,13 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
             output(&commands::resolve::accept(conn, ctx, args.id, &args.note)?)
         }
         Command::Merge(args) => output(&commands::merge::run(conn, ctx, &args.ids, args.into)?),
+        Command::Split(args) => output(&commands::split::run(
+            conn,
+            ctx,
+            args.id,
+            &args.occurrence,
+            &args.symptom,
+        )?),
         Command::List(args) => {
             let list = ListArgs {
                 status: args.status.status(),
