@@ -7,6 +7,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crate::clock;
 use crate::commands::add::AddInput;
 use crate::commands::edit::EditArgs;
+use crate::commands::export::{ExportArgs, Format};
 use crate::commands::list::{ListArgs, Sort};
 use crate::commands::seen::SeenArgs;
 use crate::commands::{self, Context};
@@ -126,6 +127,17 @@ pub enum Command {
         Merged entries are left out."
     )]
     Stats(StatsArgs),
+    /// Write complete entries in rank order, within a token budget, with secrets masked
+    #[command(
+        long_about = "Write complete entries with all their occurrences, in rank order: silent \
+        first, then by score over the last 90 days, entries not seen in that window after them, \
+        and open entries with a ref (reported, waiting) last. With --max-tokens it stops before the \
+        first entry that would go over the budget, estimated at four characters per token, and \
+        says how many were left out. Well-known secret formats are masked in the output (token \
+        prefixes such as ghp_ and sk-, AWS key ids, Authorization and Cookie values, credentials \
+        in URLs, private keys, secret=value assignments); the stored text is not changed."
+    )]
+    Export(ExportCommand),
     /// List entries, ranked by how much they cost recently
     #[command(
         long_about = "List entries, by default open ones, ranked: silent entries first, then by \
@@ -383,6 +395,19 @@ pub struct StatsArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ExportCommand {
+    /// Output format; json prints the same object as --json
+    #[arg(long, value_enum, default_value_t = Format::Md)]
+    pub format: Format,
+    /// Only entries in this status
+    #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
+    pub status: StatusFilter,
+    /// Stop before the output would go over this many tokens (four characters each)
+    #[arg(long, value_name = "N")]
+    pub max_tokens: Option<usize>,
+}
+
+#[derive(Debug, Args)]
 pub struct ListCommand {
     /// Only entries in this status
     #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
@@ -428,8 +453,15 @@ pub fn run(args: Vec<OsString>) -> i32 {
             return fail(&Error::usage(message), true);
         }
     };
-    let json = cli.json;
-    match execute(cli) {
+    let json = cli.json
+        || matches!(
+            &cli.command,
+            Command::Export(ExportCommand {
+                format: Format::Json,
+                ..
+            })
+        );
+    match execute(cli, json) {
         Ok(output) => {
             let mut stdout = std::io::stdout().lock();
             let text = if json { output.json } else { output.text };
@@ -469,7 +501,7 @@ fn env(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
 
-fn execute(cli: Cli) -> Result<Output> {
+fn execute(cli: Cli, json: bool) -> Result<Output> {
     let ctx = Context {
         now: clock::now_from_env(env("FLIS_NOW").as_deref())?,
         cwd: crate::context::current_dir(),
@@ -478,10 +510,15 @@ fn execute(cli: Cli) -> Result<Output> {
     };
     let path = db::resolve_path(env)?;
     let mut conn = db::open(&path)?;
-    dispatch(&mut conn, &ctx, cli.command).map_err(|error| db::storage_error(&path, error))
+    dispatch(&mut conn, &ctx, cli.command, json).map_err(|error| db::storage_error(&path, error))
 }
 
-fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) -> Result<Output> {
+fn dispatch(
+    conn: &mut rusqlite::Connection,
+    ctx: &Context,
+    command: Command,
+    json: bool,
+) -> Result<Output> {
     match command {
         Command::Search(args) => {
             let text = args.text.join(" ");
@@ -562,6 +599,14 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
             &args.symptom,
         )?),
         Command::Stats(args) => output(&commands::stats::run(conn, ctx, args.since.as_deref())?),
+        Command::Export(args) => {
+            let export = ExportArgs {
+                format: if json { Format::Json } else { args.format },
+                status: args.status.status(),
+                max_tokens: args.max_tokens,
+            };
+            output(&commands::export::run(conn, ctx, &export)?)
+        }
         Command::List(args) => {
             let list = ListArgs {
                 status: args.status.status(),
