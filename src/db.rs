@@ -7,7 +7,7 @@ use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 
 use crate::error::{Error, Result};
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// `FLIS_DB`, else `$XDG_DATA_HOME/flis/flis.sqlite3`, else
 /// `~/.local/share/flis/flis.sqlite3`.
@@ -124,7 +124,8 @@ fn migrate(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
-const MIGRATIONS: &[&str] = &[r"
+const MIGRATIONS: &[&str] = &[
+    r"
 CREATE TABLE entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symptom TEXT NOT NULL,
@@ -176,7 +177,19 @@ CREATE VIRTUAL TABLE entries_fts USING fts5 (
     symptom, workaround, hypothesis, fix, subject, notes,
     tokenize = 'porter unicode61 remove_diacritics 2'
 );
-"];
+",
+    r"
+CREATE TABLE imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    entries INTEGER NOT NULL,
+    at TEXT NOT NULL
+);
+
+CREATE INDEX imports_hash ON imports (hash);
+",
+];
 
 #[cfg(test)]
 mod tests {
@@ -232,6 +245,32 @@ mod tests {
         assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
         drop(conn);
         assert_eq!(user_version(&open(&path).unwrap()).unwrap(), SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrates_a_version_one_database() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("flis.sqlite3");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(MIGRATIONS[0]).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+        conn.execute(
+            "INSERT INTO entries (symptom, created_at, updated_at) VALUES ('kept', 'a', 'a')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let conn = open(&path).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
+        let symptom: String = conn
+            .query_row("SELECT symptom FROM entries", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(symptom, "kept");
+        let imports: i64 = conn
+            .query_row("SELECT count(*) FROM imports", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(imports, 0);
     }
 
     #[test]
