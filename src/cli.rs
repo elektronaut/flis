@@ -6,11 +6,12 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::clock;
 use crate::commands::add::AddInput;
+use crate::commands::edit::EditArgs;
 use crate::commands::seen::SeenArgs;
 use crate::commands::{self, Context};
 use crate::db;
 use crate::error::{Error, Result};
-use crate::model::{Cost, Status};
+use crate::model::{Cost, FixLocation, Status};
 use crate::output::Report;
 
 #[derive(Debug, Parser)]
@@ -76,6 +77,23 @@ pub enum Command {
     Seen(SeenCommand),
     /// Show an entry in full, with all its occurrences
     Show(ShowArgs),
+    /// Change fields of an open entry; earlier values are kept
+    #[command(
+        long_about = "Change fields of an open entry, for example to record a better workaround \
+        or the ref of an upstream report. The previous value of each changed field is kept and shown \
+        by `flis show <id> --history`. An empty value clears an optional field."
+    )]
+    Edit(EditCommand),
+    /// Mark an entry fixed, once the root fix has landed and the original failure was re-run
+    #[command(
+        long_about = "Mark an entry fixed. Run it only after the root cause is fixed and the \
+        original failure was re-run and passed. A workaround never resolves an entry; record it with \
+        `flis edit <id> --workaround` instead. An upstream report that is filed but not fixed stays \
+        open: set its ref with `flis edit <id> --ref`."
+    )]
+    Resolve(ResolveArgs),
+    /// Make a resolved or accepted entry open again
+    Reopen(IdArg),
 }
 
 fn parse_id(raw: &str) -> std::result::Result<i64, String> {
@@ -85,6 +103,13 @@ fn parse_id(raw: &str) -> std::result::Result<i64, String> {
         .ok()
         .filter(|id| *id > 0)
         .ok_or_else(|| format!("{raw:?} is not an entry id (a positive number such as 12)"))
+}
+
+#[derive(Debug, Args)]
+pub struct IdArg {
+    /// Entry id
+    #[arg(value_parser = parse_id)]
+    pub id: i64,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -220,6 +245,53 @@ pub struct ShowArgs {
     pub history: bool,
 }
 
+#[derive(Debug, Args)]
+pub struct EditCommand {
+    /// Entry id
+    #[arg(value_parser = parse_id)]
+    pub id: i64,
+    /// What happened, including the literal error text
+    #[arg(long, value_name = "TEXT")]
+    pub symptom: Option<String>,
+    /// How to get past it
+    #[arg(long, value_name = "TEXT")]
+    pub workaround: Option<String>,
+    /// Suspected cause, unverified
+    #[arg(long, value_name = "TEXT")]
+    pub hypothesis: Option<String>,
+    /// Suggested root fix
+    #[arg(long, value_name = "TEXT")]
+    pub fix: Option<String>,
+    /// The tool or area, as one lowercase word
+    #[arg(long, value_name = "WORD")]
+    pub subject: Option<String>,
+    /// The failure gave a plausible wrong answer with no error
+    #[arg(long, overrides_with = "no_silent")]
+    pub silent: bool,
+    /// The failure did show an error
+    #[arg(long, overrides_with = "silent")]
+    pub no_silent: bool,
+    /// Link to the issue, PR, commit, file or rule that tracks it, such as a filed upstream report
+    #[arg(long = "ref", value_name = "R")]
+    pub reference: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ResolveArgs {
+    /// Entry id
+    #[arg(value_parser = parse_id)]
+    pub id: i64,
+    /// Where the fix landed
+    #[arg(long = "where", value_enum, value_name = "WHERE")]
+    pub location: FixLocation,
+    /// The commit, PR, issue, file or rule with the fix
+    #[arg(long = "ref", value_name = "R")]
+    pub reference: String,
+    /// What was done, and how the original failure was re-run
+    #[arg(long, value_name = "TEXT")]
+    pub note: Option<String>,
+}
+
 /// Runs flis with the given arguments and returns the exit code.
 pub fn run(args: Vec<OsString>) -> i32 {
     let wants_json = args.iter().skip(1).any(|arg| arg == "--json");
@@ -339,5 +411,32 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
             output(&commands::seen::run(conn, ctx, &seen)?)
         }
         Command::Show(args) => output(&commands::show::run(conn, args.id, args.history)?),
+        Command::Edit(args) => {
+            let silent = match (args.silent, args.no_silent) {
+                (true, _) => Some(true),
+                (_, true) => Some(false),
+                _ => None,
+            };
+            let edit = EditArgs {
+                id: args.id,
+                symptom: args.symptom,
+                workaround: args.workaround,
+                hypothesis: args.hypothesis,
+                fix: args.fix,
+                subject: args.subject,
+                silent,
+                reference: args.reference,
+            };
+            output(&commands::edit::run(conn, ctx, edit)?)
+        }
+        Command::Resolve(args) => output(&commands::resolve::resolve(
+            conn,
+            ctx,
+            args.id,
+            args.location,
+            &args.reference,
+            args.note.as_deref(),
+        )?),
+        Command::Reopen(args) => output(&commands::resolve::reopen(conn, ctx, args.id)?),
     }
 }

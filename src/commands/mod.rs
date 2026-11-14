@@ -1,4 +1,6 @@
 pub mod add;
+pub mod edit;
+pub mod resolve;
 pub mod search;
 pub mod seen;
 pub mod show;
