@@ -5,3 +5,5 @@ pub mod clock;
 pub mod context;
 pub mod db;
 pub mod error;
+pub mod model;
+pub mod store;
