@@ -2,6 +2,7 @@ mod common;
 mod entries;
 mod export;
 mod git;
+mod import;
 mod ranking;
 mod review;
 mod search;

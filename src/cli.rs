@@ -8,6 +8,7 @@ use crate::clock;
 use crate::commands::add::AddInput;
 use crate::commands::edit::EditArgs;
 use crate::commands::export::{ExportArgs, Format};
+use crate::commands::import::ImportArgs;
 use crate::commands::list::{ListArgs, Sort};
 use crate::commands::seen::SeenArgs;
 use crate::commands::{self, Context};
@@ -138,6 +139,21 @@ pub enum Command {
         in URLs, private keys, secret=value assignments); the stored text is not changed."
     )]
     Export(ExportCommand),
+    /// Import the Markdown log that flis replaces
+    #[command(
+        long_about = "Import the Markdown log that flis replaces. After a header that ends with a \
+        line of only `---`, each entry is one line `YYYY-MM-DD · symptom · fix · project`, \
+        optionally as a list item; indented lines directly under it become the note of its \
+        occurrence. Each line becomes one open entry with one minor occurrence at midnight UTC of \
+        its date, and the fix becomes the workaround.\n\n\
+        Projects are trimmed, a trailing parenthetical and a trailing ` #123` are dropped, and \
+        `-` and `global` mean no project; --project-map renames the rest. A line without exactly \
+        four fields, a date and a symptom is malformed: it is printed with its line number and \
+        not imported, and the rest still is.\n\n\
+        The import is one transaction. A file whose content or path was imported before is \
+        refused unless --force is given. --dry-run reports what would be imported."
+    )]
+    Import(ImportCommand),
     /// List entries, ranked by how much they cost recently
     #[command(
         long_about = "List entries, by default open ones, ranked: silent entries first, then by \
@@ -408,6 +424,22 @@ pub struct ExportCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct ImportCommand {
+    /// The Markdown log
+    #[arg(value_name = "FILE")]
+    pub file: PathBuf,
+    /// Parse and report, and write nothing
+    #[arg(long)]
+    pub dry_run: bool,
+    /// Import even though this file was imported before
+    #[arg(long)]
+    pub force: bool,
+    /// A JSON object mapping project names, as the dry run lists them, to new names or null
+    #[arg(long, value_name = "FILE")]
+    pub project_map: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
 pub struct ListCommand {
     /// Only entries in this status
     #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
@@ -606,6 +638,15 @@ fn dispatch(
                 max_tokens: args.max_tokens,
             };
             output(&commands::export::run(conn, ctx, &export)?)
+        }
+        Command::Import(args) => {
+            let import = ImportArgs {
+                file: &args.file,
+                dry_run: args.dry_run,
+                force: args.force,
+                project_map: args.project_map.as_deref(),
+            };
+            output(&commands::import::run(conn, ctx, &import)?)
         }
         Command::List(args) => {
             let list = ListArgs {
