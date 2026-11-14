@@ -95,6 +95,13 @@ pub enum Command {
     Resolve(ResolveArgs),
     /// Make a resolved or accepted entry open again
     Reopen(IdArg),
+    /// Mark an open entry as a known problem with no fix planned
+    #[command(
+        long_about = "Mark an open entry as a known problem with no fix planned. --note gives the \
+        reason and is required. Accepted entries are kept for lookup and still collect occurrences, \
+        but leave the review ranking. Meant for the review; `flis reopen <id>` undoes it."
+    )]
+    Accept(AcceptArgs),
     /// List entries, ranked by how much they cost recently
     #[command(
         long_about = "List entries, by default open ones, ranked: silent entries first, then by \
@@ -303,6 +310,16 @@ pub struct ResolveArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct AcceptArgs {
+    /// Entry id
+    #[arg(value_parser = parse_id)]
+    pub id: i64,
+    /// Why it is accepted: why no fix is planned
+    #[arg(long, value_name = "TEXT")]
+    pub note: String,
+}
+
+#[derive(Debug, Args)]
 pub struct ListCommand {
     /// Only entries in this status
     #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
@@ -470,6 +487,9 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
             args.note.as_deref(),
         )?),
         Command::Reopen(args) => output(&commands::resolve::reopen(conn, ctx, args.id)?),
+        Command::Accept(args) => {
+            output(&commands::resolve::accept(conn, ctx, args.id, &args.note)?)
+        }
         Command::List(args) => {
             let list = ListArgs {
                 status: args.status.status(),

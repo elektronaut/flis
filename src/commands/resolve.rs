@@ -48,6 +48,27 @@ pub fn resolve(
     finish(tx, entry, merged_from)
 }
 
+pub fn accept(conn: &mut Connection, ctx: &Context, id: i64, note: &str) -> Result<StatusReport> {
+    let note = clean(Some(note))
+        .ok_or_else(|| Error::usage("--note gives the reason the problem is accepted"))?;
+    let now = ctx.now_text();
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let (entry, merged_from) = store::resolve_entry(&tx, id)?;
+    if entry.status != Status::Open {
+        return Err(Error::usage(format!(
+            "entry {} is {}; run `flis reopen {}` first to accept it",
+            entry.id, entry.status, entry.id
+        )));
+    }
+    let changes = [
+        (Field::Status, Some(Status::Accepted.to_string())),
+        (Field::FixLocation, Some(FixLocation::None.to_string())),
+        (Field::ResolutionNote, Some(note)),
+    ];
+    store::update_fields(&tx, &entry, &changes, &now)?;
+    finish(tx, entry, merged_from)
+}
+
 pub fn reopen(conn: &mut Connection, ctx: &Context, id: i64) -> Result<StatusReport> {
     let now = ctx.now_text();
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -86,6 +107,10 @@ impl Report for StatusReport {
                 "Resolved {id} (in {}, ref {}).",
                 self.entry.fix_location.map_or("?", FixLocation::as_str),
                 self.entry.reference.as_deref().unwrap_or("?")
+            ),
+            (_, Status::Accepted) => format!(
+                "Accepted {id}: {}",
+                self.entry.resolution_note.as_deref().unwrap_or("?")
             ),
             (previous, _) => format!(
                 "Reopened {id} (was {previous}). The earlier resolution is in `flis show {id} --history`."
