@@ -23,6 +23,17 @@ flis reopen <id>
 flis list [--status S] [--project P] [--subject S] [--since D] [--sort rank|recent] [--limit N]
 ```
 
+For the review:
+
+```
+flis accept <id> --note T
+flis merge <id>... --into <id>
+flis split <id> --occurrence <oid>... --symptom T
+flis stats [--since D]
+flis export [--format md|json] [--status S] [--max-tokens N]
+flis import <file> [--dry-run] [--force] [--project-map FILE]
+```
+
 - `search` takes free text, such as a pasted error line. It looks for entries
   matching every word first, then any word, and says which.
 - `add` always writes, then lists up to three similar entries. `flis add --help`
@@ -33,10 +44,38 @@ flis list [--status S] [--project P] [--subject S] [--since D] [--sort rank|rece
   occurrences × distinct days × distinct projects, counting only occurrences
   inside `--since` (90 days by default). Open entries with a `ref` are listed
   separately as reported and waiting.
+- `accept` marks a known problem with no fix planned; the reason is
+  required. Accepted entries stay searchable and leave the ranking.
+- `merge` moves the occurrences of duplicates to one entry and appends each
+  source's text to its first occurrence's note. The source stays as a stub,
+  hidden from `list`, `search` and `stats`, and its id leads to the target.
+  There is no undo; `split` moves occurrences out into a new entry and
+  repairs a wrong merge.
+- `stats` counts entries by status, project and subject, and the open
+  entries reported upstream and waiting.
+- `export` writes complete entries with their occurrences in rank order and
+  stops before the first entry that would go over `--max-tokens` (four
+  characters per token), saying how many it left out. It masks well-known
+  secret formats in its output: token prefixes (`ghp_`, `github_pat_`,
+  `sk-`, `xox…`), AWS access key ids, `Authorization` and `Cookie` header
+  values, credentials in URLs, private key blocks and `key=value`
+  assignments whose key names a secret. The stored text is not changed.
+- `import` reads a Markdown log with one entry per line,
+  `YYYY-MM-DD · symptom · fix · project`, after a header ending in a `---`
+  line. Each line becomes an open entry with one occurrence; indented lines
+  under it become its note. Lines without exactly four fields are printed
+  and skipped. A file imported before is refused unless `--force`.
 
 Every command takes `--json`, which prints exactly one JSON object on stdout.
 Nothing prompts. Exit codes: 0 success (empty results included), 1 internal or
 I/O failure, 2 usage or validation error, 3 id not found.
+
+## Review
+
+`skills/flis-review/SKILL.md` is a skill for agents such as Claude Code that
+reviews the log on request: it snapshots it with `stats` and `export`, merges
+duplicates, ranks by recurrence, verifies the logged causes, and proposes a
+disposition per problem. It fixes only what it is asked to fix.
 
 ## Storage
 
