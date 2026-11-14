@@ -7,6 +7,7 @@ pub mod search;
 pub mod seen;
 pub mod show;
 pub mod split;
+pub mod stats;
 
 use std::path::PathBuf;
 

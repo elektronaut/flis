@@ -118,6 +118,14 @@ pub enum Command {
         (o117 or 117). The entry keeps at least one occurrence. Also repairs a wrong merge."
     )]
     Split(SplitArgs),
+    /// Count entries by status, project and subject
+    #[command(
+        long_about = "Count entries by status, project and subject, and the open entries reported \
+        upstream and waiting. Facts only, nothing inferred. Without --since every entry and \
+        occurrence counts; with it, only entries seen in the window and their occurrences there. \
+        Merged entries are left out."
+    )]
+    Stats(StatsArgs),
     /// List entries, ranked by how much they cost recently
     #[command(
         long_about = "List entries, by default open ones, ranked: silent entries first, then by \
@@ -368,6 +376,13 @@ pub struct SplitArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct StatsArgs {
+    /// Only count occurrences since: 90d, 2w, 36h, a date (2026-08-01) or a timestamp
+    #[arg(long, value_name = "D")]
+    pub since: Option<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct ListCommand {
     /// Only entries in this status
     #[arg(long, value_enum, default_value_t = StatusFilter::Open, value_name = "S")]
@@ -546,6 +561,7 @@ fn dispatch(conn: &mut rusqlite::Connection, ctx: &Context, command: Command) ->
             &args.occurrence,
             &args.symptom,
         )?),
+        Command::Stats(args) => output(&commands::stats::run(conn, ctx, args.since.as_deref())?),
         Command::List(args) => {
             let list = ListArgs {
                 status: args.status.status(),
