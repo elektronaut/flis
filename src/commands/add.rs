@@ -79,7 +79,7 @@ pub struct AddReport {
 
 pub fn run(conn: &mut Connection, ctx: &Context, input: AddInput) -> Result<AddReport> {
     let symptom = clean(input.symptom.as_deref())
-        .ok_or_else(|| Error::usage("a symptom is required: flis add \"<what happened>\""))?;
+        .ok_or_else(|| Error::usage("a symptom is required: snags add \"<what happened>\""))?;
     let subject = normalize_subject(input.subject.as_deref())?;
     let origin = ctx.origin(input.project.as_deref(), input.agent.as_deref());
     let now = ctx.now_text();
@@ -194,7 +194,7 @@ impl Report for AddReport {
         if !self.similar.is_empty() {
             out.push_str(
                 "\nSimilar entries. If one is the same problem, it will be merged in review; \
-                 next time run `flis seen <id>` instead of adding:\n",
+                 next time run `snags seen <id>` instead of adding:\n",
             );
             for hit in &self.similar {
                 let _ = writeln!(out, "  {}", hit.heading());
@@ -206,7 +206,7 @@ impl Report for AddReport {
             if let Some(first) = suggestion.closest.first() {
                 let _ = writeln!(
                     out,
-                    " Closest existing subjects: {}. To switch: flis edit {} --subject {first}",
+                    " Closest existing subjects: {}. To switch: snags edit {} --subject {first}",
                     suggestion.closest.join(", "),
                     self.id,
                 );

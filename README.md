@@ -1,8 +1,8 @@
-# flis
+# snags
 
-`flis` (Norwegian for splinter) is a local CLI where coding agents record
-anything that slowed down development, look up what is already known about a
-failure, and close entries once the root cause is fixed.
+`snags` is a local CLI where coding agents record anything that slowed down
+development, look up what is already known about a failure, and close entries
+once the root cause is fixed.
 
 An **entry** is one problem: a symptom, how to get past it, and what is thought
 to cause it. An **occurrence** is one time someone hit it. Recurrence is the
@@ -11,32 +11,32 @@ priority signal, so every encounter is recorded.
 ## Commands
 
 ```
-flis search <text>... [--limit N] [--status S]
-flis add <symptom>... [--workaround T] [--hypothesis T] [--fix T]
+snags search <text>... [--limit N] [--status S]
+snags add <symptom>... [--workaround T] [--hypothesis T] [--fix T]
          [--subject S] [--silent] [--cost C] [--note T] [--project P] [--input FILE]
-flis seen <id> [--note T] [--cost C]
-flis show <id> [--history]
-flis edit <id> [--symptom T] [--workaround T] [--hypothesis T] [--fix T]
+snags seen <id> [--note T] [--cost C]
+snags show <id> [--history]
+snags edit <id> [--symptom T] [--workaround T] [--hypothesis T] [--fix T]
           [--subject S] [--silent | --no-silent] [--ref R]
-flis resolve <id> --where setup|project|upstream --ref R [--note T]
-flis reopen <id>
-flis list [--status S] [--project P] [--subject S] [--since D] [--sort rank|recent] [--limit N]
+snags resolve <id> --where setup|project|upstream --ref R [--note T]
+snags reopen <id>
+snags list [--status S] [--project P] [--subject S] [--since D] [--sort rank|recent] [--limit N]
 ```
 
 For the review:
 
 ```
-flis accept <id> --note T
-flis merge <id>... --into <id>
-flis split <id> --occurrence <oid>... --symptom T
-flis stats [--since D]
-flis export [--format md|json] [--status S] [--max-tokens N]
-flis import <file> [--dry-run] [--force] [--project-map FILE]
+snags accept <id> --note T
+snags merge <id>... --into <id>
+snags split <id> --occurrence <oid>... --symptom T
+snags stats [--since D]
+snags export [--format md|json] [--status S] [--max-tokens N]
+snags import <file> [--dry-run] [--force] [--project-map FILE]
 ```
 
 - `search` takes free text, such as a pasted error line. It looks for entries
   matching every word first, then any word, and says which.
-- `add` always writes, then lists up to three similar entries. `flis add --help`
+- `add` always writes, then lists up to three similar entries. `snags add --help`
   describes each field. Long or quote-heavy text goes in a JSON file passed
   with `--input`.
 - `seen` on a resolved entry reopens it and counts a regression.
@@ -72,7 +72,7 @@ I/O failure, 2 usage or validation error, 3 id not found.
 
 ## Review
 
-`skills/flis-review/SKILL.md` is a skill for agents such as Claude Code that
+`skills/snags-review/SKILL.md` is a skill for agents such as Claude Code that
 reviews the log on request: it snapshots it with `stats` and `export`, merges
 duplicates, ranks by recurrence, verifies the logged causes, and proposes a
 disposition per problem. It fixes only what it is asked to fix.
@@ -81,9 +81,9 @@ disposition per problem. It fixes only what it is asked to fix.
 
 One SQLite database per machine, never synced:
 
-1. `$FLIS_DB`, if set
-2. else `$XDG_DATA_HOME/flis/flis.sqlite3`
-3. else `~/.local/share/flis/flis.sqlite3`
+1. `$SNAGS_DB`, if set
+2. else `$XDG_DATA_HOME/snags/snags.sqlite3`
+3. else `~/.local/share/snags/snags.sqlite3`
 
 The directory is created with mode `0700` and the file with `0600`. The
 database runs in WAL mode with a five second busy timeout, and each command is

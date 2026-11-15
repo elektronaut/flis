@@ -31,7 +31,7 @@ pub fn resolve(
     let (entry, merged_from) = store::resolve_entry(&tx, id)?;
     if entry.status == Status::Resolved {
         return Err(Error::usage(format!(
-            "entry {} is already resolved (ref {}); run `flis reopen {}` first to resolve it again",
+            "entry {} is already resolved (ref {}); run `snags reopen {}` first to resolve it again",
             entry.id,
             entry.reference.as_deref().unwrap_or("none"),
             entry.id
@@ -56,7 +56,7 @@ pub fn accept(conn: &mut Connection, ctx: &Context, id: i64, note: &str) -> Resu
     let (entry, merged_from) = store::resolve_entry(&tx, id)?;
     if entry.status != Status::Open {
         return Err(Error::usage(format!(
-            "entry {} is {}; run `flis reopen {}` first to accept it",
+            "entry {} is {}; run `snags reopen {}` first to accept it",
             entry.id, entry.status, entry.id
         )));
     }
@@ -113,7 +113,7 @@ impl Report for StatusReport {
                 self.entry.resolution_note.as_deref().unwrap_or("?")
             ),
             (previous, _) => format!(
-                "Reopened {id} (was {previous}). The earlier resolution is in `flis show {id} --history`."
+                "Reopened {id} (was {previous}). The earlier resolution is in `snags show {id} --history`."
             ),
         };
         out.push_str(&line);

@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::common::Flis;
+use crate::common::Snags;
 
 fn ids(report: &Value) -> Vec<i64> {
     report["entries"]
@@ -13,41 +13,45 @@ fn ids(report: &Value) -> Vec<i64> {
 
 const TOKEN: &str = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
 
-fn seeded() -> Flis {
-    let mut flis = Flis::new();
-    flis.at("2026-06-01T10:00:00Z");
-    flis.add(&["old and forgotten", "--cost", "blocker"]);
-    flis.at("2026-11-01T10:00:00Z");
-    let busy = flis.add(&["busy failure", "--project", "acme", "--cost", "major"]);
-    flis.at("2026-11-02T10:00:00Z");
-    flis.run(&["seen", &busy.to_string(), "--project", "nova"])
+fn seeded() -> Snags {
+    let mut snags = Snags::new();
+    snags.at("2026-06-01T10:00:00Z");
+    snags.add(&["old and forgotten", "--cost", "blocker"]);
+    snags.at("2026-11-01T10:00:00Z");
+    let busy = snags.add(&["busy failure", "--project", "acme", "--cost", "major"]);
+    snags.at("2026-11-02T10:00:00Z");
+    snags
+        .run(&["seen", &busy.to_string(), "--project", "nova"])
         .ok();
-    flis.add(&["quiet failure"]);
-    flis.add(&["silent failure", "--silent"]);
-    let waiting = flis.add(&["upstream failure", "--cost", "blocker"]);
-    flis.run(&["edit", &waiting.to_string(), "--ref", "acme/tool#9"])
+    snags.add(&["quiet failure"]);
+    snags.add(&["silent failure", "--silent"]);
+    let waiting = snags.add(&["upstream failure", "--cost", "blocker"]);
+    snags
+        .run(&["edit", &waiting.to_string(), "--ref", "acme/tool#9"])
         .ok();
-    let done = flis.add(&["fixed failure"]);
-    flis.run(&[
-        "resolve",
-        &done.to_string(),
-        "--where",
-        "setup",
-        "--ref",
-        "abc",
-    ])
-    .ok();
-    let dup = flis.add(&["busy failure again"]);
-    flis.run(&["merge", &dup.to_string(), "--into", &busy.to_string()])
+    let done = snags.add(&["fixed failure"]);
+    snags
+        .run(&[
+            "resolve",
+            &done.to_string(),
+            "--where",
+            "setup",
+            "--ref",
+            "abc",
+        ])
         .ok();
-    flis.at("2026-11-14T12:00:00Z");
-    flis
+    let dup = snags.add(&["busy failure again"]);
+    snags
+        .run(&["merge", &dup.to_string(), "--into", &busy.to_string()])
+        .ok();
+    snags.at("2026-11-14T12:00:00Z");
+    snags
 }
 
 #[test]
 fn exports_complete_entries_in_rank_order() {
-    let flis = seeded();
-    let report = flis.json(&["export"]);
+    let snags = seeded();
+    let report = snags.json(&["export"]);
     assert_eq!(ids(&report), [4, 2, 3, 1, 5]);
     assert_eq!(report["total"], 5);
     assert_eq!(report["omitted"], 0);
@@ -63,14 +67,14 @@ fn exports_complete_entries_in_rank_order() {
     assert_eq!(report["entries"][3]["rank"]["occurrences"], 0);
     assert_eq!(report["entries"][4]["waiting"], true);
 
-    let all = flis.json(&["export", "--status", "all"]);
+    let all = snags.json(&["export", "--status", "all"]);
     assert_eq!(all["total"], 6);
-    let resolved = flis.json(&["export", "--status", "resolved"]);
+    let resolved = snags.json(&["export", "--status", "resolved"]);
     assert_eq!(ids(&resolved), [6]);
 
-    let text = flis.run(&["export"]).ok().stdout;
+    let text = snags.run(&["export"]).ok().stdout;
     assert!(
-        text.starts_with("# flis export\n\n5 open entries,"),
+        text.starts_with("# snags export\n\n5 open entries,"),
         "{text}"
     );
     assert!(text.contains("\n## 4 open · SILENT\n"), "{text}");
@@ -91,9 +95,9 @@ fn exports_complete_entries_in_rank_order() {
         .collect();
     assert!(order.is_sorted(), "{text}");
 
-    let json_format = flis.run(&["export", "--format", "json"]).ok();
+    let json_format = snags.run(&["export", "--format", "json"]).ok();
     let mut from_format = json_format.json();
-    let mut from_flag = flis.json(&["export"]);
+    let mut from_flag = snags.json(&["export"]);
     from_format["estimated_tokens"] = Value::Null;
     from_flag["estimated_tokens"] = Value::Null;
     assert_eq!(from_format, from_flag);
@@ -101,11 +105,11 @@ fn exports_complete_entries_in_rank_order() {
 
 #[test]
 fn stops_at_the_token_budget() {
-    let flis = seeded();
+    let snags = seeded();
     for format in ["md", "json"] {
-        let full = flis.run(&["export", "--format", format]).ok().stdout;
+        let full = snags.run(&["export", "--format", format]).ok().stdout;
         for budget in [150, 300, 500] {
-            let out = flis
+            let out = snags
                 .run(&[
                     "export",
                     "--format",
@@ -124,7 +128,7 @@ fn stops_at_the_token_budget() {
         }
     }
 
-    let report = flis.json(&["export", "--max-tokens", "500"]);
+    let report = snags.json(&["export", "--max-tokens", "500"]);
     let kept = ids(&report);
     assert!(!kept.is_empty() && kept.len() < 5, "{kept:?}");
     assert_eq!(kept, [4, 2, 3, 1, 5][..kept.len()]);
@@ -132,7 +136,7 @@ fn stops_at_the_token_budget() {
     assert_eq!(report["max_tokens"], 500);
     assert!(report["estimated_tokens"].as_u64().unwrap() <= 500);
 
-    let text = flis.run(&["export", "--max-tokens", "300"]).ok().stdout;
+    let text = snags.run(&["export", "--max-tokens", "300"]).ok().stdout;
     assert!(
         text.contains("left out to stay within --max-tokens 300."),
         "{text}"
@@ -142,32 +146,32 @@ fn stops_at_the_token_budget() {
         "{text}"
     );
 
-    let tiny = flis.run(&["export", "--max-tokens", "60"]).ok().stdout;
+    let tiny = snags.run(&["export", "--max-tokens", "60"]).ok().stdout;
     assert!(tiny.contains("0 of 5 open entries"), "{tiny}");
     assert!(tiny.contains("The first entry alone needs about"), "{tiny}");
 
-    let big = flis.json(&["export", "--max-tokens", "100000"]);
+    let big = snags.json(&["export", "--max-tokens", "100000"]);
     assert_eq!(big["omitted"], 0);
-    assert_eq!(flis.run(&["export", "--max-tokens", "0"]).code, 2);
-    assert_eq!(flis.run(&["export", "--format", "yaml"]).code, 2);
+    assert_eq!(snags.run(&["export", "--max-tokens", "0"]).code, 2);
+    assert_eq!(snags.run(&["export", "--format", "yaml"]).code, 2);
 }
 
 #[test]
 fn masks_secrets_on_the_way_out_only() {
-    let flis = Flis::new();
+    let snags = Snags::new();
     let symptom =
         format!("git push asked for a password; remote is https://{TOKEN}@github.com/acme/shop");
-    let id = flis.add(&[
+    let id = snags.add(&[
         &symptom,
         "--workaround",
         "export DB_PASSWORD=hunter2 and curl -H 'Authorization: Bearer abc.def'",
         "--note=-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----",
     ]);
-    flis.add(&[
+    snags.add(&[
         "cargo test failed in src/models/secret_store.rs:42 at commit 3f2a9c1e5b7d4f6a8c0e2b4d6f8a0c2e4b6d8f0a",
     ]);
 
-    let text = flis.run(&["export"]).ok().stdout;
+    let text = snags.run(&["export"]).ok().stdout;
     assert!(!text.contains(TOKEN), "{text}");
     assert!(!text.contains("hunter2"), "{text}");
     assert!(!text.contains("abc.def"), "{text}");
@@ -189,11 +193,11 @@ fn masks_secrets_on_the_way_out_only() {
         "{text}"
     );
 
-    let report = flis.json(&["export"]);
+    let report = snags.json(&["export"]);
     assert_eq!(report["masked"], 4);
     assert!(!report.to_string().contains(TOKEN));
 
-    let show = flis.json(&["show", &id.to_string()]);
+    let show = snags.json(&["show", &id.to_string()]);
     assert_eq!(show["entry"]["symptom"], symptom.as_str());
     assert!(
         show["occurrences"][0]["note"]
@@ -201,18 +205,18 @@ fn masks_secrets_on_the_way_out_only() {
             .unwrap()
             .contains("b3BlbnNzaC1rZXktdjEAAAAA")
     );
-    assert_eq!(flis.json(&["search", "hunter2"])["hits"][0]["id"], id);
+    assert_eq!(snags.json(&["search", "hunter2"])["hits"][0]["id"], id);
 }
 
 #[test]
 fn export_of_an_empty_database() {
-    let flis = Flis::new();
-    let report = flis.json(&["export", "--max-tokens", "10"]);
+    let snags = Snags::new();
+    let report = snags.json(&["export", "--max-tokens", "10"]);
     assert_eq!(report["total"], 0);
     assert_eq!(report["entries"], serde_json::json!([]));
-    let text = flis.run(&["export"]).ok().stdout;
+    let text = snags.run(&["export"]).ok().stdout;
     assert!(
-        text.starts_with("# flis export\n\n0 open entries"),
+        text.starts_with("# snags export\n\n0 open entries"),
         "{text}"
     );
 }

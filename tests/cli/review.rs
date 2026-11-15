@@ -1,15 +1,15 @@
-use crate::common::Flis;
+use crate::common::Snags;
 
 #[test]
 fn accept_requires_a_reason_and_keeps_it() {
-    let mut flis = Flis::new();
-    let id = flis.add(&["macOS asks for keychain access"]).to_string();
-    assert_eq!(flis.run(&["accept", &id]).code, 2);
-    assert_eq!(flis.run(&["accept", &id, "--note", "  "]).code, 2);
-    assert_eq!(flis.run(&["accept", "99", "--note", "x"]).code, 3);
+    let mut snags = Snags::new();
+    let id = snags.add(&["macOS asks for keychain access"]).to_string();
+    assert_eq!(snags.run(&["accept", &id]).code, 2);
+    assert_eq!(snags.run(&["accept", &id, "--note", "  "]).code, 2);
+    assert_eq!(snags.run(&["accept", "99", "--note", "x"]).code, 3);
 
-    flis.at("2026-11-14T13:00:00Z");
-    let report = flis.json(&["accept", &id, "--note", "by design, no fix planned"]);
+    snags.at("2026-11-14T13:00:00Z");
+    let report = snags.json(&["accept", &id, "--note", "by design, no fix planned"]);
     assert_eq!(report["previous_status"], "open");
     let entry = &report["entry"];
     assert_eq!(entry["status"], "accepted");
@@ -17,43 +17,44 @@ fn accept_requires_a_reason_and_keeps_it() {
     assert_eq!(entry["resolution_note"], "by design, no fix planned");
     assert_eq!(entry["updated_at"], "2026-11-14T13:00:00Z");
 
-    let run = flis.run(&["accept", &id, "--note", "again"]);
+    let run = snags.run(&["accept", &id, "--note", "again"]);
     assert_eq!(run.code, 2);
-    assert!(run.stderr.contains("flis reopen"), "{}", run.stderr);
+    assert!(run.stderr.contains("snags reopen"), "{}", run.stderr);
 
-    let seen = flis.json(&["seen", &id]);
+    let seen = snags.json(&["seen", &id]);
     assert_eq!(seen["entry"]["status"], "accepted");
-    let hits = flis.run(&["search", "keychain"]).ok().stdout;
+    let hits = snags.run(&["search", "keychain"]).ok().stdout;
     assert!(hits.contains("accepted: by design"), "{hits}");
-    let list = flis.json(&["list"]);
+    let list = snags.json(&["list"]);
     assert!(list["ranked"]["entries"].as_array().unwrap().is_empty());
 
-    flis.run(&["reopen", &id]).ok();
-    let show = flis.json(&["show", &id]);
+    snags.run(&["reopen", &id]).ok();
+    let show = snags.json(&["show", &id]);
     assert_eq!(show["entry"]["status"], "open");
     assert!(show["entry"]["resolution_note"].is_null());
 }
 
 #[test]
 fn accept_prints_the_reason() {
-    let flis = Flis::new();
-    let id = flis.add(&["slow first build"]).to_string();
-    let text = flis
+    let snags = Snags::new();
+    let id = snags.add(&["slow first build"]).to_string();
+    let text = snags
         .run(&["accept", &id, "--note", "cold cache"])
         .ok()
         .stdout;
     assert_eq!(text, format!("Accepted {id}: cold cache\n"));
 
-    let resolved = flis.add(&["fixed thing"]).to_string();
-    flis.run(&["resolve", &resolved, "--where", "setup", "--ref", "abc"])
+    let resolved = snags.add(&["fixed thing"]).to_string();
+    snags
+        .run(&["resolve", &resolved, "--where", "setup", "--ref", "abc"])
         .ok();
-    let run = flis.run(&["accept", &resolved, "--note", "x", "--json"]);
+    let run = snags.run(&["accept", &resolved, "--note", "x", "--json"]);
     assert_eq!(run.code, 2);
     assert_eq!(run.json()["error"]["kind"], "usage");
 }
 
-fn occurrence_count(flis: &Flis, id: i64) -> usize {
-    flis.json(&["show", &id.to_string()])["occurrences"]
+fn occurrence_count(snags: &Snags, id: i64) -> usize {
+    snags.json(&["show", &id.to_string()])["occurrences"]
         .as_array()
         .unwrap()
         .len()
@@ -61,15 +62,15 @@ fn occurrence_count(flis: &Flis, id: i64) -> usize {
 
 #[test]
 fn merge_moves_occurrences_and_keeps_the_source_text() {
-    let mut flis = Flis::new();
-    flis.at("2026-11-10T10:00:00Z");
-    let target = flis.add(&[
+    let mut snags = Snags::new();
+    snags.at("2026-11-10T10:00:00Z");
+    let target = snags.add(&[
         "worktree guard refused compound command",
         "--project",
         "acme",
     ]);
-    flis.at("2026-11-11T10:00:00Z");
-    let source = flis.add(&[
+    snags.at("2026-11-11T10:00:00Z");
+    let source = snags.add(&[
         "guard says too complex to verify",
         "--workaround",
         "run the commands one by one",
@@ -82,13 +83,14 @@ fn merge_moves_occurrences_and_keeps_the_source_text() {
         "--project",
         "nova",
     ]);
-    flis.at("2026-11-12T10:00:00Z");
-    flis.run(&["seen", &source.to_string(), "--project", "shop"])
+    snags.at("2026-11-12T10:00:00Z");
+    snags
+        .run(&["seen", &source.to_string(), "--project", "shop"])
         .ok();
-    let other = flis.add(&["guard blocked cd && git", "--project", "mono"]);
+    let other = snags.add(&["guard blocked cd && git", "--project", "mono"]);
 
-    flis.at("2026-11-14T12:00:00Z");
-    let report = flis.json(&[
+    snags.at("2026-11-14T12:00:00Z");
+    let report = snags.json(&[
         "merge",
         &source.to_string(),
         &other.to_string(),
@@ -102,7 +104,7 @@ fn merge_moves_occurrences_and_keeps_the_source_text() {
     assert_eq!(report["seen"]["count"], 4);
     assert_eq!(report["entry"]["updated_at"], "2026-11-14T12:00:00Z");
 
-    let show = flis.json(&["show", &target.to_string()]);
+    let show = snags.json(&["show", &target.to_string()]);
     let notes: Vec<&str> = show["occurrences"]
         .as_array()
         .unwrap()
@@ -123,7 +125,7 @@ fn merge_moves_occurrences_and_keeps_the_source_text() {
         format!("Merged from {other}: guard blocked cd && git")
     );
 
-    let stub = flis.sql().query_row(
+    let stub = snags.sql().query_row(
         "SELECT merged_into, symptom FROM entries WHERE id = ?1",
         [source],
         |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
@@ -133,7 +135,7 @@ fn merge_moves_occurrences_and_keeps_the_source_text() {
         (target, "guard says too complex to verify".to_owned())
     );
 
-    let list = flis.json(&["list"]);
+    let list = snags.json(&["list"]);
     let listed: Vec<i64> = list["ranked"]["entries"]
         .as_array()
         .unwrap()
@@ -143,20 +145,20 @@ fn merge_moves_occurrences_and_keeps_the_source_text() {
     assert_eq!(listed, [target]);
     assert_eq!(list["ranked"]["entries"][0]["projects"], 4);
 
-    let search = flis.json(&["search", "too complex to verify"]);
+    let search = snags.json(&["search", "too complex to verify"]);
     let hits = search["hits"].as_array().unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0]["id"], target);
 
-    let show = flis.json(&["show", &source.to_string()]);
+    let show = snags.json(&["show", &source.to_string()]);
     assert_eq!(show["entry"]["id"], target);
     assert_eq!(show["merged_from"], serde_json::json!([source]));
 
-    let seen = flis.json(&["seen", &other.to_string()]);
+    let seen = snags.json(&["seen", &other.to_string()]);
     assert_eq!(seen["entry"]["id"], target);
-    assert_eq!(occurrence_count(&flis, target), 5);
+    assert_eq!(occurrence_count(&snags, target), 5);
 
-    let text = flis
+    let text = snags
         .run(&["merge", &source.to_string(), "--into", &target.to_string()])
         .ok()
         .stdout;
@@ -169,21 +171,21 @@ fn merge_moves_occurrences_and_keeps_the_source_text() {
 
 #[test]
 fn merge_refuses_itself_and_unknown_ids_without_writing() {
-    let flis = Flis::new();
-    let a = flis.add(&["first"]).to_string();
-    let b = flis.add(&["second"]).to_string();
+    let snags = Snags::new();
+    let a = snags.add(&["first"]).to_string();
+    let b = snags.add(&["second"]).to_string();
 
-    let run = flis.run(&["merge", &a, "--into", &a]);
+    let run = snags.run(&["merge", &a, "--into", &a]);
     assert_eq!(run.code, 2);
     assert!(run.stderr.contains("into itself"), "{}", run.stderr);
 
-    assert_eq!(flis.run(&["merge", &a, "99", "--into", &b]).code, 3);
-    assert_eq!(flis.run(&["merge", &a, "--into", "99"]).code, 3);
-    assert_eq!(flis.run(&["merge", "--into", &b]).code, 2);
-    assert_eq!(occurrence_count(&flis, 1), 1);
-    assert_eq!(occurrence_count(&flis, 2), 1);
+    assert_eq!(snags.run(&["merge", &a, "99", "--into", &b]).code, 3);
+    assert_eq!(snags.run(&["merge", &a, "--into", "99"]).code, 3);
+    assert_eq!(snags.run(&["merge", "--into", &b]).code, 2);
+    assert_eq!(occurrence_count(&snags, 1), 1);
+    assert_eq!(occurrence_count(&snags, 2), 1);
     assert!(
-        flis.json(&["show", &a])["merged_from"]
+        snags.json(&["show", &a])["merged_from"]
             .as_array()
             .unwrap()
             .is_empty()
@@ -192,26 +194,26 @@ fn merge_refuses_itself_and_unknown_ids_without_writing() {
 
 #[test]
 fn merge_into_a_stub_follows_it_and_chains_resolve() {
-    let flis = Flis::new();
-    let a = flis.add(&["alpha failure"]).to_string();
-    let b = flis.add(&["beta failure"]).to_string();
-    let c = flis.add(&["gamma failure"]).to_string();
-    let d = flis.add(&["delta failure"]).to_string();
+    let snags = Snags::new();
+    let a = snags.add(&["alpha failure"]).to_string();
+    let b = snags.add(&["beta failure"]).to_string();
+    let c = snags.add(&["gamma failure"]).to_string();
+    let d = snags.add(&["delta failure"]).to_string();
 
-    flis.run(&["merge", &a, "--into", &b]).ok();
-    let report = flis.json(&["merge", &b, "--into", &c]);
+    snags.run(&["merge", &a, "--into", &b]).ok();
+    let report = snags.json(&["merge", &b, "--into", &c]);
     assert_eq!(report["merged"][0]["occurrences"], 2);
 
-    let show = flis.json(&["show", &a]);
+    let show = snags.json(&["show", &a]);
     assert_eq!(show["entry"]["id"].to_string(), c);
     assert_eq!(show["merged_from"], serde_json::json!([1, 2]));
 
-    let report = flis.json(&["merge", &d, "--into", &a]);
+    let report = snags.json(&["merge", &d, "--into", &a]);
     assert_eq!(report["entry"]["id"].to_string(), c);
     assert_eq!(report["merged_from"], serde_json::json!([1, 2]));
     assert_eq!(report["seen"]["count"], 4);
 
-    let run = flis.run(&["merge", &c, "--into", &a]);
+    let run = snags.run(&["merge", &c, "--into", &a]);
     assert_eq!(run.code, 2);
     assert!(
         run.stderr.contains(&format!("{a} was merged into {c}")),
@@ -219,7 +221,7 @@ fn merge_into_a_stub_follows_it_and_chains_resolve() {
         run.stderr
     );
 
-    let text = flis.run(&["list"]).ok().stdout;
+    let text = snags.run(&["list"]).ok().stdout;
     assert!(text.contains("gamma failure"), "{text}");
     for gone in ["alpha", "beta", "delta"] {
         assert!(!text.contains(gone), "{text}");
@@ -228,8 +230,8 @@ fn merge_into_a_stub_follows_it_and_chains_resolve() {
 
 #[test]
 fn split_moves_named_occurrences_into_a_new_entry() {
-    let mut flis = Flis::new();
-    let id = flis.add(&[
+    let mut snags = Snags::new();
+    let id = snags.add(&[
         "push rejected",
         "--subject",
         "git",
@@ -238,20 +240,21 @@ fn split_moves_named_occurrences_into_a_new_entry() {
         "--project",
         "acme",
     ]);
-    flis.at("2026-11-14T13:00:00Z");
+    snags.at("2026-11-14T13:00:00Z");
     for project in ["nova", "shop"] {
-        flis.run(&[
-            "seen",
-            &id.to_string(),
-            "--project",
-            project,
-            "--note",
-            "hook said no",
-        ])
-        .ok();
+        snags
+            .run(&[
+                "seen",
+                &id.to_string(),
+                "--project",
+                project,
+                "--note",
+                "hook said no",
+            ])
+            .ok();
     }
-    flis.at("2026-11-14T14:00:00Z");
-    let report = flis.json(&[
+    snags.at("2026-11-14T14:00:00Z");
+    let report = snags.json(&[
         "split",
         &id.to_string(),
         "--occurrence",
@@ -268,7 +271,7 @@ fn split_moves_named_occurrences_into_a_new_entry() {
     assert!(report["entry"]["workaround"].is_null());
     assert_eq!(report["entry"]["created_at"], "2026-11-14T14:00:00Z");
 
-    let show = flis.json(&["show", &new_id.to_string()]);
+    let show = snags.json(&["show", &new_id.to_string()]);
     let projects: Vec<&str> = show["occurrences"]
         .as_array()
         .unwrap()
@@ -276,13 +279,13 @@ fn split_moves_named_occurrences_into_a_new_entry() {
         .map(|o| o["project"].as_str().unwrap())
         .collect();
     assert_eq!(projects, ["nova", "shop"]);
-    assert_eq!(occurrence_count(&flis, id), 1);
+    assert_eq!(occurrence_count(&snags, id), 1);
 
-    let search = flis.json(&["search", "hook said no"]);
+    let search = snags.json(&["search", "hook said no"]);
     assert_eq!(search["hits"][0]["id"], new_id);
     assert_eq!(search["hits"].as_array().unwrap().len(), 1);
 
-    let text = flis
+    let text = snags
         .run(&[
             "split",
             &new_id.to_string(),
@@ -304,39 +307,42 @@ fn split_moves_named_occurrences_into_a_new_entry() {
 
 #[test]
 fn split_refuses_to_empty_an_entry_or_take_foreign_occurrences() {
-    let flis = Flis::new();
-    let a = flis.add(&["first"]).to_string();
-    flis.run(&["seen", &a]).ok();
-    flis.add(&["second"]);
+    let snags = Snags::new();
+    let a = snags.add(&["first"]).to_string();
+    snags.run(&["seen", &a]).ok();
+    snags.add(&["second"]);
 
-    let run = flis.run(&["split", &a, "--occurrence", "o1", "o2", "--symptom", "x"]);
+    let run = snags.run(&["split", &a, "--occurrence", "o1", "o2", "--symptom", "x"]);
     assert_eq!(run.code, 2);
     assert!(run.stderr.contains("every occurrence"), "{}", run.stderr);
 
-    let run = flis.run(&["split", &a, "--occurrence", "o3", "--symptom", "x"]);
+    let run = snags.run(&["split", &a, "--occurrence", "o3", "--symptom", "x"]);
     assert_eq!(run.code, 2);
     assert!(run.stderr.contains("belongs to entry 2"), "{}", run.stderr);
 
     assert_eq!(
-        flis.run(&["split", &a, "--occurrence", "o99", "--symptom", "x"])
+        snags
+            .run(&["split", &a, "--occurrence", "o99", "--symptom", "x"])
             .code,
         3
     );
-    assert_eq!(flis.run(&["split", &a, "--occurrence", "o1"]).code, 2);
-    assert_eq!(flis.run(&["split", &a, "--symptom", "x"]).code, 2);
+    assert_eq!(snags.run(&["split", &a, "--occurrence", "o1"]).code, 2);
+    assert_eq!(snags.run(&["split", &a, "--symptom", "x"]).code, 2);
     assert_eq!(
-        flis.run(&["split", &a, "--occurrence", "p1", "--symptom", "x"])
+        snags
+            .run(&["split", &a, "--occurrence", "p1", "--symptom", "x"])
             .code,
         2
     );
     assert_eq!(
-        flis.run(&["split", &a, "--occurrence", "o1", "--symptom", " "])
+        snags
+            .run(&["split", &a, "--occurrence", "o1", "--symptom", " "])
             .code,
         2
     );
-    assert_eq!(occurrence_count(&flis, 1), 2);
+    assert_eq!(occurrence_count(&snags, 1), 2);
     assert_eq!(
-        flis.json(&["list"])["ranked"]["entries"]
+        snags.json(&["list"])["ranked"]["entries"]
             .as_array()
             .unwrap()
             .len(),
@@ -346,15 +352,15 @@ fn split_refuses_to_empty_an_entry_or_take_foreign_occurrences() {
 
 #[test]
 fn split_repairs_a_wrong_merge() {
-    let flis = Flis::new();
-    let a = flis
+    let snags = Snags::new();
+    let a = snags
         .add(&["npm install hangs", "--project", "acme"])
         .to_string();
-    let b = flis
+    let b = snags
         .add(&["npm install hangs on a proxy", "--project", "nova"])
         .to_string();
-    flis.run(&["merge", &b, "--into", &a]).ok();
-    let report = flis.json(&[
+    snags.run(&["merge", &b, "--into", &a]).ok();
+    let report = snags.json(&[
         "split",
         &b,
         "--occurrence",
@@ -364,6 +370,6 @@ fn split_repairs_a_wrong_merge() {
     ]);
     assert_eq!(report["source"]["id"].to_string(), a);
     assert_eq!(report["merged_from"], serde_json::json!([2]));
-    let note = flis.json(&["show", &report["id"].to_string()])["occurrences"][0]["note"].clone();
+    let note = snags.json(&["show", &report["id"].to_string()])["occurrences"][0]["note"].clone();
     assert_eq!(note, "Merged from 2: npm install hangs on a proxy");
 }

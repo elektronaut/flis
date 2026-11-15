@@ -1,13 +1,13 @@
 [package]
-name = "flis"
+name = "snags"
 version = "0.1.0"
 description = "A local log where coding agents record what slowed them down, look up known problems, and close them once fixed"
 readme = "README.md"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
-repository = "https://github.com/elektronaut/flis"
-homepage = "https://github.com/elektronaut/flis"
+repository = "https://github.com/elektronaut/snags"
+homepage = "https://github.com/elektronaut/snags"
 keywords = ["cli", "agents", "papercuts", "sqlite", "developer-tools"]
 categories = ["command-line-utilities", "development-tools"]
 

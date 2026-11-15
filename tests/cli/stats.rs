@@ -1,17 +1,18 @@
 use serde_json::json;
 
-use crate::common::Flis;
+use crate::common::Snags;
 
 #[test]
 fn stats_counts_by_status_project_and_subject() {
-    let mut flis = Flis::new();
-    flis.at("2026-10-01T10:00:00Z");
-    flis.add(&["old one", "--subject", "git", "--project", "acme"]);
-    flis.at("2026-11-10T10:00:00Z");
-    let a = flis.add(&["gh token expired", "--subject", "gh", "--project", "acme"]);
-    flis.run(&["seen", &a.to_string(), "--project", "nova"])
+    let mut snags = Snags::new();
+    snags.at("2026-10-01T10:00:00Z");
+    snags.add(&["old one", "--subject", "git", "--project", "acme"]);
+    snags.at("2026-11-10T10:00:00Z");
+    let a = snags.add(&["gh token expired", "--subject", "gh", "--project", "acme"]);
+    snags
+        .run(&["seen", &a.to_string(), "--project", "nova"])
         .ok();
-    let b = flis.add(&[
+    let b = snags.add(&[
         "gh rate limited",
         "--subject",
         "gh",
@@ -19,24 +20,29 @@ fn stats_counts_by_status_project_and_subject() {
         "--project",
         "nova",
     ]);
-    let c = flis.add(&["git hook slow", "--subject", "git"]);
-    let d = flis.add(&["no subject here", "--project", "shop"]);
-    let dup = flis.add(&["dup of d", "--subject", "dup", "--project", "shop"]);
-    flis.at("2026-11-12T10:00:00Z");
-    flis.run(&["edit", &b.to_string(), "--ref", "acme/gh#1"])
+    let c = snags.add(&["git hook slow", "--subject", "git"]);
+    let d = snags.add(&["no subject here", "--project", "shop"]);
+    let dup = snags.add(&["dup of d", "--subject", "dup", "--project", "shop"]);
+    snags.at("2026-11-12T10:00:00Z");
+    snags
+        .run(&["edit", &b.to_string(), "--ref", "acme/gh#1"])
         .ok();
-    flis.run(&["resolve", &c.to_string(), "--where", "setup", "--ref", "x"])
+    snags
+        .run(&["resolve", &c.to_string(), "--where", "setup", "--ref", "x"])
         .ok();
-    flis.run(&["seen", &c.to_string()]).ok();
-    flis.run(&["resolve", &c.to_string(), "--where", "setup", "--ref", "y"])
+    snags.run(&["seen", &c.to_string()]).ok();
+    snags
+        .run(&["resolve", &c.to_string(), "--where", "setup", "--ref", "y"])
         .ok();
-    flis.run(&["accept", &d.to_string(), "--note", "known"])
+    snags
+        .run(&["accept", &d.to_string(), "--note", "known"])
         .ok();
-    flis.run(&["merge", &dup.to_string(), "--into", &d.to_string()])
+    snags
+        .run(&["merge", &dup.to_string(), "--into", &d.to_string()])
         .ok();
 
-    flis.at("2026-11-14T12:00:00Z");
-    let stats = flis.json(&["stats"]);
+    snags.at("2026-11-14T12:00:00Z");
+    let stats = snags.json(&["stats"]);
     assert!(stats["since"].is_null());
     assert_eq!(stats["entries"], 5);
     assert_eq!(stats["occurrences"], 8);
@@ -67,7 +73,7 @@ fn stats_counts_by_status_project_and_subject() {
         ])
     );
 
-    let recent = flis.json(&["stats", "--since", "2026-11-01"]);
+    let recent = snags.json(&["stats", "--since", "2026-11-01"]);
     assert_eq!(recent["since"], "2026-11-01T00:00:00Z");
     assert_eq!(recent["entries"], 4);
     assert_eq!(recent["occurrences"], 7);
@@ -80,7 +86,7 @@ fn stats_counts_by_status_project_and_subject() {
         json!({"name": "acme", "entries": 1, "occurrences": 1})
     );
 
-    let text = flis.run(&["stats"]).ok().stdout;
+    let text = snags.run(&["stats"]).ok().stdout;
     assert!(
         text.starts_with("All entries.\n5 entries, 8 occurrences, 2026-10-01 to 2026-11-12.\n"),
         "{text}"
@@ -99,15 +105,15 @@ fn stats_counts_by_status_project_and_subject() {
     );
     assert!(!text.contains("dup"), "{text}");
 
-    assert_eq!(flis.run(&["stats", "--since", "soon"]).code, 2);
+    assert_eq!(snags.run(&["stats", "--since", "soon"]).code, 2);
 }
 
 #[test]
 fn stats_on_an_empty_database() {
-    let flis = Flis::new();
-    let stats = flis.json(&["stats"]);
+    let snags = Snags::new();
+    let stats = snags.json(&["stats"]);
     assert_eq!(stats["entries"], 0);
     assert_eq!(stats["projects"], json!([]));
-    let text = flis.run(&["stats"]).ok().stdout;
+    let text = snags.run(&["stats"]).ok().stdout;
     assert!(text.contains("0 entries, 0 occurrences."), "{text}");
 }

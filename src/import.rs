@@ -1,4 +1,4 @@
-//! Parses the Markdown log that flis replaces: a header ending in a `---`
+//! Parses the Markdown log that snags replaces: a header ending in a `---`
 //! line, then one entry per line as `YYYY-MM-DD · symptom · fix · project`,
 //! with indented detail lines under an entry.
 

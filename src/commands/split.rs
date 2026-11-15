@@ -55,7 +55,7 @@ pub fn run(
     if store::seen_summary(&tx, source.id)?.count <= moved.len() as i64 {
         return Err(Error::usage(format!(
             "that is every occurrence of {}; an entry keeps at least one. \
-             To describe it differently, run `flis edit {} --symptom \"…\"`",
+             To describe it differently, run `snags edit {} --symptom \"…\"`",
             source.id, source.id
         )));
     }
@@ -111,7 +111,7 @@ impl Report for SplitReport {
         );
         let _ = writeln!(
             out,
-            "Add what is known about it: flis edit {} --workaround \"…\" --hypothesis \"…\"",
+            "Add what is known about it: snags edit {} --workaround \"…\" --hypothesis \"…\"",
             self.id
         );
         out

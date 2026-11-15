@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 pub fn now_from_env(value: Option<&str>) -> Result<OffsetDateTime> {
     match value {
         Some(raw) if !raw.trim().is_empty() => parse_timestamp(raw.trim())
-            .map_err(|_| Error::usage(format!("FLIS_NOW is not an RFC 3339 timestamp: {raw}"))),
+            .map_err(|_| Error::usage(format!("SNAGS_NOW is not an RFC 3339 timestamp: {raw}"))),
         _ => Ok(OffsetDateTime::now_utc()
             .replace_nanosecond(0)
             .unwrap_or_else(|_| OffsetDateTime::now_utc())),
@@ -95,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn flis_now_overrides_the_clock() {
+    fn snags_now_overrides_the_clock() {
         let at = now_from_env(Some("2026-01-02T03:04:05Z")).unwrap();
         assert_eq!(format_timestamp(at), "2026-01-02T03:04:05Z");
         assert!(now_from_env(Some("yesterday")).is_err());

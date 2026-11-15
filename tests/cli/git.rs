@@ -1,10 +1,10 @@
-use crate::common::{Flis, git};
+use crate::common::{Snags, git};
 
 #[test]
 fn worktrees_report_the_main_repository() {
-    let flis = Flis::new();
-    let home = flis.path("home");
-    let repo = flis.path("src/acme");
+    let snags = Snags::new();
+    let home = snags.path("home");
+    let repo = snags.path("src/acme");
     std::fs::create_dir_all(repo.join("app/models")).unwrap();
     git(&home, &repo, &["init", "--quiet"]);
     git(
@@ -12,7 +12,7 @@ fn worktrees_report_the_main_repository() {
         &repo,
         &["commit", "--quiet", "--allow-empty", "-m", "start"],
     );
-    let worktree = flis.path("trees/acme-feature");
+    let worktree = snags.path("trees/acme-feature");
     git(
         &home,
         &repo,
@@ -27,7 +27,7 @@ fn worktrees_report_the_main_repository() {
     );
     std::fs::create_dir_all(worktree.join("lib/tasks")).unwrap();
 
-    let added = flis
+    let added = snags
         .run_in(
             &repo.join("app/models"),
             &["add", "rubocop crashes", "--json"],
@@ -35,13 +35,15 @@ fn worktrees_report_the_main_repository() {
         .ok()
         .json();
     let id = added["id"].to_string();
-    flis.run_in(&worktree.join("lib/tasks"), &["seen", &id])
+    snags
+        .run_in(&worktree.join("lib/tasks"), &["seen", &id])
         .ok();
-    flis.run_in(&worktree, &["seen", &id, "--project", "nova"])
+    snags
+        .run_in(&worktree, &["seen", &id, "--project", "nova"])
         .ok();
-    flis.run(&["seen", &id]).ok();
+    snags.run(&["seen", &id]).ok();
 
-    let show = flis.json(&["show", &id]);
+    let show = snags.json(&["show", &id]);
     let occurrences = show["occurrences"].as_array().unwrap();
     let field = |index: usize, name: &str| occurrences[index][name].as_str().map(str::to_owned);
     assert_eq!(field(0, "project").as_deref(), Some("acme"));
@@ -59,9 +61,9 @@ fn worktrees_report_the_main_repository() {
 
 #[test]
 fn detached_head_has_no_branch() {
-    let flis = Flis::new();
-    let home = flis.path("home");
-    let repo = flis.path("shop");
+    let snags = Snags::new();
+    let home = snags.path("home");
+    let repo = snags.path("shop");
     std::fs::create_dir_all(&repo).unwrap();
     git(&home, &repo, &["init", "--quiet"]);
     git(
@@ -71,8 +73,8 @@ fn detached_head_has_no_branch() {
     );
     git(&home, &repo, &["checkout", "--quiet", "--detach"]);
 
-    flis.run_in(&repo, &["add", "detached", "--json"]).ok();
-    let show = flis.json(&["show", "1"]);
+    snags.run_in(&repo, &["add", "detached", "--json"]).ok();
+    let show = snags.json(&["show", "1"]);
     assert_eq!(show["occurrences"][0]["project"], "shop");
     assert!(show["occurrences"][0]["branch"].is_null());
 }

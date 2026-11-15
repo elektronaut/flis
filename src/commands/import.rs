@@ -263,7 +263,7 @@ impl Report for ImportReport {
         if !self.malformed.is_empty() {
             out.push_str(
                 "\nMalformed lines, not imported (not four fields separated by ` · `, or no \
-                 date or symptom). Add them by hand with `flis add`:\n",
+                 date or symptom). Add them by hand with `snags add`:\n",
             );
             for malformed in &self.malformed {
                 let _ = writeln!(out, "  line {}: {}", malformed.line, malformed.text);

@@ -6,8 +6,8 @@ use tempfile::TempDir;
 
 pub const NOW: &str = "2026-11-14T12:00:00Z";
 
-/// A flis with its own database, home and working directory in a temp dir.
-pub struct Flis {
+/// A snags with its own database, home and working directory in a temp dir.
+pub struct Snags {
     pub temp: TempDir,
     pub db: PathBuf,
     pub now: String,
@@ -36,10 +36,10 @@ impl Run {
     }
 }
 
-impl Flis {
+impl Snags {
     pub fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
-        let db = temp.path().join("data/flis.sqlite3");
+        let db = temp.path().join("data/snags.sqlite3");
         std::fs::create_dir_all(temp.path().join("home")).unwrap();
         std::fs::create_dir_all(temp.path().join("work")).unwrap();
         Self {
@@ -54,16 +54,16 @@ impl Flis {
     }
 
     pub fn command(&self, dir: &Path) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_flis"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_snags"));
         command
             .current_dir(dir)
-            .env("FLIS_DB", &self.db)
-            .env("FLIS_NOW", &self.now)
+            .env("SNAGS_DB", &self.db)
+            .env("SNAGS_NOW", &self.now)
             .env("HOME", self.path("home"))
             .env("XDG_DATA_HOME", self.path("home/.local/share"))
             .env("GIT_CEILING_DIRECTORIES", self.temp.path())
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env_remove("FLIS_AGENT")
+            .env_remove("SNAGS_AGENT")
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE");

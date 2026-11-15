@@ -119,19 +119,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
-name = "flis"
-version = "0.1.0"
-dependencies = [
- "clap",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "time",
-]
-
-[[package]]
 name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -375,6 +362,19 @@ name = "smallvec"
 version = "1.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "149309498a5f7334b12ddae0cad8aba81ce785fe91755068867e017cf98fee46"
+
+[[package]]
+name = "snags"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
+]
 
 [[package]]
 name = "sqlite-wasm-rs"

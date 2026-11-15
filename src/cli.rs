@@ -19,16 +19,16 @@ use crate::output::Report;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "flis",
+    name = "snags",
     version,
     about = "Record what slowed down development, look up known problems, and close them once fixed",
     long_about = "Record what slowed down development, look up known problems, and close them once fixed.\n\n\
         An entry is one problem: a symptom, how to get past it, and what is thought to cause it. \
         An occurrence is one time someone hit it. When something fails unexpectedly, search first; \
-        on a match use its workaround and run `flis seen <id>`, otherwise `flis add` once you are past it.",
+        on a match use its workaround and run `snags seen <id>`, otherwise `snags add` once you are past it.",
     after_help = "Exit codes: 0 success (empty results too), 1 internal or I/O failure, \
         2 usage or validation error, 3 id not found.\n\
-        Database: $FLIS_DB, else $XDG_DATA_HOME/flis/flis.sqlite3, else ~/.local/share/flis/flis.sqlite3.",
+        Database: $SNAGS_DB, else $XDG_DATA_HOME/snags/snags.sqlite3, else ~/.local/share/snags/snags.sqlite3.",
     disable_help_subcommand = true
 )]
 pub struct Cli {
@@ -52,8 +52,8 @@ pub enum Command {
     Search(SearchArgs),
     /// Record a new problem and its first occurrence
     #[command(
-        long_about = "Record a new problem and its first occurrence. Run `flis search` first; if it \
-            finds the problem, run `flis seen <id>` instead.\n\n\
+        long_about = "Record a new problem and its first occurrence. Run `snags search` first; if it \
+            finds the problem, run `snags seen <id>` instead.\n\n\
             Log anything that cost real time or is likely to recur: tooling failures, misleading \
             errors, environment quirks, dead ends (even with no workaround yet), your own repeated \
             mistakes, and problems in third-party tools. Do not log bugs in the project you are \
@@ -62,9 +62,9 @@ pub enum Command {
             `add` always writes, then lists up to three similar entries. A duplicate is fine: the \
             review merges them.",
         after_long_help = "Examples:\n  \
-            flis add 'bundle install: \"Could not find gem rails-8.1 in locally installed gems\"' \\\n    \
+            snags add 'bundle install: \"Could not find gem rails-8.1 in locally installed gems\"' \\\n    \
             --subject bundler --workaround 'run bin/setup first; it sets BUNDLE_PATH' --cost major\n  \
-            flis add --input entry.json\n\n\
+            snags add --input entry.json\n\n\
             --input FILE reads one JSON object with any of: symptom, workaround, hypothesis, fix, \
             subject, silent (true/false), cost, note, project, agent. Use it for long or quote-heavy \
             text: write the file, then run a plain command. Arguments given on the command line win \
@@ -84,15 +84,15 @@ pub enum Command {
     #[command(
         long_about = "Change fields of an open entry, for example to record a better workaround \
         or the ref of an upstream report. The previous value of each changed field is kept and shown \
-        by `flis show <id> --history`. An empty value clears an optional field."
+        by `snags show <id> --history`. An empty value clears an optional field."
     )]
     Edit(EditCommand),
     /// Mark an entry fixed, once the root fix has landed and the original failure was re-run
     #[command(
         long_about = "Mark an entry fixed. Run it only after the root cause is fixed and the \
         original failure was re-run and passed. A workaround never resolves an entry; record it with \
-        `flis edit <id> --workaround` instead. An upstream report that is filed but not fixed stays \
-        open: set its ref with `flis edit <id> --ref`."
+        `snags edit <id> --workaround` instead. An upstream report that is filed but not fixed stays \
+        open: set its ref with `snags edit <id> --ref`."
     )]
     Resolve(ResolveArgs),
     /// Make a resolved or accepted entry open again
@@ -101,7 +101,7 @@ pub enum Command {
     #[command(
         long_about = "Mark an open entry as a known problem with no fix planned. --note gives the \
         reason and is required. Accepted entries are kept for lookup and still collect occurrences, \
-        but leave the review ranking. Meant for the review; `flis reopen <id>` undoes it."
+        but leave the review ranking. Meant for the review; `snags reopen <id>` undoes it."
     )]
     Accept(AcceptArgs),
     /// Merge duplicate entries into one, moving their occurrences
@@ -110,13 +110,13 @@ pub enum Command {
         to the target, and the source's own fields are appended to the note of its first \
         occurrence, so nothing is lost. The source stays as a stub that `list`, `search` and \
         `stats` leave out; its id still leads to the target. There is no undo: repair a wrong \
-        merge with `flis split`."
+        merge with `snags split`."
     )]
     Merge(MergeArgs),
     /// Move occurrences that have a different cause into a new entry
     #[command(
         long_about = "Move occurrences that turn out to have a different cause into a new entry \
-        with the given symptom and the same subject. Occurrence ids are shown by `flis show <id>` \
+        with the given symptom and the same subject. Occurrence ids are shown by `snags show <id>` \
         (o117 or 117). The entry keeps at least one occurrence. Also repairs a wrong merge."
     )]
     Split(SplitArgs),
@@ -139,9 +139,9 @@ pub enum Command {
         in URLs, private keys, secret=value assignments); the stored text is not changed."
     )]
     Export(ExportCommand),
-    /// Import the Markdown log that flis replaces
+    /// Import the Markdown log that snags replaces
     #[command(
-        long_about = "Import the Markdown log that flis replaces. After a header that ends with a \
+        long_about = "Import the Markdown log that snags replaces. After a header that ends with a \
         line of only `---`, each entry is one line `YYYY-MM-DD · symptom · fix · project`, \
         optionally as a list item; indented lines directly under it become the note of its \
         occurrence. Each line becomes one open entry with one minor occurrence at midnight UTC of \
@@ -276,7 +276,7 @@ pub struct AddArgs {
     #[arg(long, value_name = "P")]
     pub project: Option<String>,
 
-    /// Who hit it. Defaults to $FLIS_AGENT, else claude-code.
+    /// Who hit it. Defaults to $SNAGS_AGENT, else claude-code.
     #[arg(long, value_name = "NAME")]
     pub agent: Option<String>,
 
@@ -299,7 +299,7 @@ pub struct SeenCommand {
     /// The project it happened in. Defaults to the main repository's directory name
     #[arg(long, value_name = "P")]
     pub project: Option<String>,
-    /// Who hit it. Defaults to $FLIS_AGENT, else claude-code
+    /// Who hit it. Defaults to $SNAGS_AGENT, else claude-code
     #[arg(long, value_name = "NAME")]
     pub agent: Option<String>,
 }
@@ -461,7 +461,7 @@ pub struct ListCommand {
     pub limit: usize,
 }
 
-/// Runs flis with the given arguments and returns the exit code.
+/// Runs snags with the given arguments and returns the exit code.
 pub fn run(args: Vec<OsString>) -> i32 {
     let wants_json = args.iter().skip(1).any(|arg| arg == "--json");
     let cli = match Cli::try_parse_from(&args) {
@@ -511,7 +511,7 @@ fn fail(error: &Error, json: bool) -> i32 {
         });
         println!("{body}");
     } else {
-        eprintln!("flis: {error}");
+        eprintln!("snags: {error}");
     }
     error.exit_code()
 }
@@ -535,9 +535,9 @@ fn env(name: &str) -> Option<String> {
 
 fn execute(cli: Cli, json: bool) -> Result<Output> {
     let ctx = Context {
-        now: clock::now_from_env(env("FLIS_NOW").as_deref())?,
+        now: clock::now_from_env(env("SNAGS_NOW").as_deref())?,
         cwd: crate::context::current_dir(),
-        agent: env("FLIS_AGENT"),
+        agent: env("SNAGS_AGENT"),
         session: env("CLAUDE_CODE_SESSION_ID"),
     };
     let path = db::resolve_path(env)?;

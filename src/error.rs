@@ -43,9 +43,9 @@ impl fmt::Display for Error {
             }
             Self::Storage { path, detail } => write!(
                 f,
-                "cannot open the flis database for writing at {}: {detail}. \
+                "cannot open the snags database for writing at {}: {detail}. \
                  In a sandboxed session, add {} to sandbox.filesystem.allowWrite, \
-                 or point FLIS_DB at a writable path",
+                 or point SNAGS_DB at a writable path",
                 path.display(),
                 path.parent().unwrap_or(path).display(),
             ),

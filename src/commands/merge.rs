@@ -152,7 +152,7 @@ impl Report for MergeReport {
         );
         let _ = writeln!(
             out,
-            "The old ids lead to {id}. To undo part of it: flis split {id} --occurrence <oid>... --symptom \"…\""
+            "The old ids lead to {id}. To undo part of it: snags split {id} --occurrence <oid>... --symptom \"…\""
         );
         out
     }

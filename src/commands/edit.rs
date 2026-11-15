@@ -62,7 +62,7 @@ pub fn run(conn: &mut Connection, ctx: &Context, args: EditArgs) -> Result<EditR
     let (entry, merged_from) = store::resolve_entry(&tx, args.id)?;
     if entry.status != Status::Open {
         return Err(Error::usage(format!(
-            "entry {} is {}; only open entries can be edited (run `flis reopen {}` first)",
+            "entry {} is {}; only open entries can be edited (run `snags reopen {}` first)",
             entry.id, entry.status, entry.id
         )));
     }
@@ -90,7 +90,7 @@ impl Report for EditReport {
             ));
         } else {
             out.push_str(&format!(
-                "Updated {}: {}. Earlier values: flis show {} --history\n",
+                "Updated {}: {}. Earlier values: snags show {} --history\n",
                 self.entry.id,
                 self.changed.join(", "),
                 self.entry.id

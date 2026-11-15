@@ -9,23 +9,23 @@ use crate::error::{Error, Result};
 
 pub const SCHEMA_VERSION: i64 = 2;
 
-/// `FLIS_DB`, else `$XDG_DATA_HOME/flis/flis.sqlite3`, else
-/// `~/.local/share/flis/flis.sqlite3`.
+/// `SNAGS_DB`, else `$XDG_DATA_HOME/snags/snags.sqlite3`, else
+/// `~/.local/share/snags/snags.sqlite3`.
 pub fn resolve_path(get: impl Fn(&str) -> Option<String>) -> Result<PathBuf> {
     let set = |name: &str| get(name).filter(|value| !value.is_empty());
-    if let Some(path) = set("FLIS_DB") {
+    if let Some(path) = set("SNAGS_DB") {
         return Ok(PathBuf::from(path));
     }
     let data_home = match set("XDG_DATA_HOME").filter(|dir| Path::new(dir).is_absolute()) {
         Some(dir) => PathBuf::from(dir),
         None => {
             let home = set("HOME").ok_or_else(|| {
-                Error::Internal("neither FLIS_DB, XDG_DATA_HOME nor HOME is set".into())
+                Error::Internal("neither SNAGS_DB, XDG_DATA_HOME nor HOME is set".into())
             })?;
             PathBuf::from(home).join(".local/share")
         }
     };
-    Ok(data_home.join("flis").join("flis.sqlite3"))
+    Ok(data_home.join("snags").join("snags.sqlite3"))
 }
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -113,7 +113,7 @@ fn migrate(conn: &mut Connection) -> Result<()> {
     let version = user_version(&tx)?;
     if version > SCHEMA_VERSION {
         return Err(Error::Internal(format!(
-            "the database has schema version {version}, newer than this flis supports ({SCHEMA_VERSION}); upgrade flis"
+            "the database has schema version {version}, newer than this snags supports ({SCHEMA_VERSION}); upgrade snags"
         )));
     }
     for (index, step) in MIGRATIONS.iter().enumerate().skip(version as usize) {
@@ -206,26 +206,26 @@ mod tests {
     }
 
     #[test]
-    fn path_prefers_flis_db_then_xdg_then_home() {
+    fn path_prefers_snags_db_then_xdg_then_home() {
         let all = env(&[
-            ("FLIS_DB", "/x/f.db"),
+            ("SNAGS_DB", "/x/f.db"),
             ("XDG_DATA_HOME", "/xdg"),
             ("HOME", "/home/a"),
         ]);
         assert_eq!(resolve_path(all).unwrap(), PathBuf::from("/x/f.db"));
         let xdg = env(&[
-            ("FLIS_DB", ""),
+            ("SNAGS_DB", ""),
             ("XDG_DATA_HOME", "/xdg"),
             ("HOME", "/home/a"),
         ]);
         assert_eq!(
             resolve_path(xdg).unwrap(),
-            PathBuf::from("/xdg/flis/flis.sqlite3")
+            PathBuf::from("/xdg/snags/snags.sqlite3")
         );
         let relative_xdg = env(&[("XDG_DATA_HOME", "rel"), ("HOME", "/home/a")]);
         assert_eq!(
             resolve_path(relative_xdg).unwrap(),
-            PathBuf::from("/home/a/.local/share/flis/flis.sqlite3")
+            PathBuf::from("/home/a/.local/share/snags/snags.sqlite3")
         );
         assert!(resolve_path(env(&[])).is_err());
     }
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn creates_private_directory_and_file() {
         let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("data/flis/flis.sqlite3");
+        let path = temp.path().join("data/snags/snags.sqlite3");
         let conn = open(&path).unwrap();
         let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(path.parent().unwrap()), 0o700);
@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn migrates_a_version_one_database() {
         let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("flis.sqlite3");
+        let path = temp.path().join("snags.sqlite3");
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(MIGRATIONS[0]).unwrap();
         conn.pragma_update(None, "user_version", 1).unwrap();
@@ -295,7 +295,7 @@ mod tests {
         let locked = temp.path().join("locked");
         std::fs::create_dir(&locked).unwrap();
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o500)).unwrap();
-        let path = locked.join("flis.sqlite3");
+        let path = locked.join("snags.sqlite3");
         let message = open(&path).unwrap_err().to_string();
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
         assert!(message.contains(&path.display().to_string()), "{message}");

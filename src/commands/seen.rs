@@ -125,7 +125,7 @@ impl Report for SeenReport {
             None => {
                 let _ = writeln!(
                     out,
-                    "No workaround recorded. If you find one: flis edit {} --workaround \"…\"",
+                    "No workaround recorded. If you find one: snags edit {} --workaround \"…\"",
                     entry.id
                 );
             }

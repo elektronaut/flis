@@ -241,7 +241,7 @@ impl ExportReport {
         let included = if longest { self.total } else { self.included };
         let status = self.status.map_or("all", Status::as_str);
         let mut out = format!(
-            "# flis export\n\n{} {} entries, generated {}, ranked silent first, then by score over \
+            "# snags export\n\n{} {} entries, generated {}, ranked silent first, then by score over \
              occurrences since {}; reported, waiting entries last.",
             if omitted > 0 {
                 format!("{included} of {}", self.total)
