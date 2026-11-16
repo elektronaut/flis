@@ -177,6 +177,30 @@ pub fn set_occurrence_note(conn: &Connection, id: i64, note: &str) -> Result<()>
     Ok(())
 }
 
+/// Sets the cost of an occurrence and keeps its earlier cost in the entry's
+/// history as the field `o<id> cost`. Returns that field name, or `None` when
+/// the cost is already the same.
+pub fn set_occurrence_cost(
+    conn: &Connection,
+    occurrence: &Occurrence,
+    cost: Cost,
+    now: &str,
+) -> Result<Option<String>> {
+    if occurrence.cost == cost {
+        return Ok(None);
+    }
+    let field = format!("o{} cost", occurrence.id);
+    conn.execute(
+        "INSERT INTO entry_history (entry_id, field, old_value, at) VALUES (?1, ?2, ?3, ?4)",
+        params![occurrence.entry_id, field, occurrence.cost.as_str(), now],
+    )?;
+    conn.execute(
+        "UPDATE occurrences SET cost = ?1 WHERE id = ?2",
+        params![cost.as_str(), occurrence.id],
+    )?;
+    Ok(Some(field))
+}
+
 /// Moves occurrences to another entry: all of `from`'s, or only the given ids.
 pub fn move_occurrences(
     conn: &Connection,

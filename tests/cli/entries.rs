@@ -215,6 +215,117 @@ fn edit_keeps_history_and_only_touches_open_entries() {
 }
 
 #[test]
+fn edit_reclassifies_the_cost_of_occurrences() {
+    let mut snags = Snags::new();
+    snags.at("2026-11-01T10:00:00Z");
+    let id = snags.add(&["deploys never ran"]).to_string();
+    snags.at("2026-11-02T10:00:00Z");
+    snags.run(&["seen", &id]).ok();
+    snags.at("2026-11-03T10:00:00Z");
+    snags.run(&["seen", &id, "--cost", "major"]).ok();
+    let oids: Vec<i64> = snags.json(&["show", &id])["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["id"].as_i64().unwrap())
+        .collect();
+    let other = snags.add(&["unrelated"]);
+    let other_oid = snags.json(&["show", &other.to_string()])["occurrences"][0]["id"]
+        .as_i64()
+        .unwrap();
+
+    snags.at("2026-11-14T12:00:00Z");
+    let report = snags.json(&["edit", &id, "--cost", "major"]);
+    assert_eq!(
+        report["changed"],
+        serde_json::json!([format!("o{} cost", oids[0]), format!("o{} cost", oids[1])])
+    );
+
+    let first = format!("o{}", oids[0]);
+    let text = snags
+        .run(&["edit", &id, "--cost", "blocker", "--occurrence", &first])
+        .ok()
+        .stdout;
+    assert!(
+        text.contains(&format!("Updated {id}: {first} cost.")),
+        "{text}"
+    );
+
+    let show = snags.json(&["show", &id, "--history"]);
+    let costs: Vec<&str> = show["occurrences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["cost"].as_str().unwrap())
+        .collect();
+    assert_eq!(costs, ["blocker", "major", "major"]);
+    let history: Vec<(&str, &str)> = show["history"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|h| {
+            (
+                h["field"].as_str().unwrap(),
+                h["old_value"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    let first_cost = format!("{first} cost");
+    let second_cost = format!("o{} cost", oids[1]);
+    assert_eq!(
+        history,
+        [
+            (first_cost.as_str(), "minor"),
+            (second_cost.as_str(), "minor"),
+            (first_cost.as_str(), "major"),
+        ]
+    );
+    assert_eq!(show["entry"]["updated_at"], "2026-11-14T12:00:00Z");
+
+    let list = snags.json(&["list"]);
+    let row = list["ranked"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["id"].as_i64().unwrap().to_string() == id)
+        .unwrap();
+    assert_eq!(row["weight"], 5 + 3 + 3);
+
+    let same = snags.json(&[
+        "edit",
+        &id,
+        "--cost",
+        "major",
+        "--occurrence",
+        &oids[1].to_string(),
+    ]);
+    assert_eq!(same["changed"], serde_json::json!([]));
+
+    assert_eq!(snags.run(&["edit", &id, "--occurrence", &first]).code, 2);
+    let run = snags.run(&[
+        "edit",
+        &id,
+        "--cost",
+        "major",
+        "--occurrence",
+        &format!("o{other_oid}"),
+    ]);
+    assert_eq!(run.code, 2);
+    assert!(
+        run.stderr.contains(&format!("belongs to entry {other}")),
+        "{}",
+        run.stderr
+    );
+    assert_eq!(
+        snags
+            .run(&["edit", &id, "--cost", "major", "--occurrence", "o9999"])
+            .code,
+        3
+    );
+    assert_eq!(snags.run(&["edit", &id, "--cost", "huge"]).code, 2);
+}
+
+#[test]
 fn resolve_requires_where_and_ref() {
     let snags = Snags::new();
     let id = snags.add(&["something"]).to_string();

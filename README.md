@@ -18,6 +18,7 @@ snags seen <id> [--note T] [--cost C]
 snags show <id> [--history]
 snags edit <id> [--symptom T] [--workaround T] [--hypothesis T] [--fix T]
           [--subject S] [--silent | --no-silent] [--ref R]
+          [--cost C [--occurrence <oid>...]]
 snags resolve <id> --where setup|project|upstream --ref R [--note T]
 snags reopen <id>
 snags list [--status S] [--project P] [--subject S] [--since D] [--sort rank|recent] [--limit N]
@@ -40,6 +41,8 @@ snags import <file> [--dry-run] [--force] [--project-map FILE]
   describes each field. Long or quote-heavy text goes in a JSON file passed
   with `--input`.
 - `seen` on a resolved entry reopens it and counts a regression.
+- `edit --cost` reclassifies what occurrences cost: all of the entry's, or
+  those named with `--occurrence`. The earlier cost is kept in the history.
 - `list` shows open entries, silent ones first, then by score = weighted
   occurrences × distinct days × distinct projects, counting only occurrences
   inside `--since` (90 days by default). Open entries with a `ref` are listed

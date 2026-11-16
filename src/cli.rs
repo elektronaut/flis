@@ -83,8 +83,9 @@ pub enum Command {
     /// Change fields of an open entry; earlier values are kept
     #[command(
         long_about = "Change fields of an open entry, for example to record a better workaround \
-        or the ref of an upstream report. The previous value of each changed field is kept and shown \
-        by `snags show <id> --history`. An empty value clears an optional field."
+        or the ref of an upstream report, or reclassify what its occurrences cost. The previous value \
+        of each changed field is kept and shown by `snags show <id> --history`. An empty value clears \
+        an optional field."
     )]
     Edit(EditCommand),
     /// Mark an entry fixed, once the root fix has landed and the original failure was re-run
@@ -343,6 +344,13 @@ pub struct EditCommand {
     /// Link to the issue, PR, commit, file or rule that tracks it, such as a filed upstream report
     #[arg(long = "ref", value_name = "R")]
     pub reference: Option<String>,
+    /// Reclassify how much time it cost: every occurrence of the entry, or only those given
+    /// with --occurrence
+    #[arg(long, value_enum, value_name = "C")]
+    pub cost: Option<Cost>,
+    /// With --cost, an occurrence to reclassify, such as o117; repeat it or give several
+    #[arg(long, requires = "cost", num_args = 1.., value_parser = parse_occurrence_id, value_name = "OID")]
+    pub occurrence: Vec<i64>,
 }
 
 #[derive(Debug, Args)]
@@ -607,6 +615,8 @@ fn dispatch(
                 subject: args.subject,
                 silent,
                 reference: args.reference,
+                cost: args.cost,
+                occurrences: args.occurrence,
             };
             output(&commands::edit::run(conn, ctx, edit)?)
         }

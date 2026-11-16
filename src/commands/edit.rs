@@ -3,11 +3,12 @@ use serde::Serialize;
 
 use super::{Context, clean, normalize_subject};
 use crate::error::{Error, Result};
-use crate::model::{Entry, Status};
+use crate::model::{Cost, Entry, Occurrence, Status};
 use crate::output::Report;
 use crate::store::{self, Field};
 
-/// The fields to change. `Some("")` clears an optional field.
+/// The fields to change. `Some("")` clears an optional field. `cost` applies
+/// to the occurrences in `occurrences`, or to all of the entry's when empty.
 #[derive(Debug, Default)]
 pub struct EditArgs {
     pub id: i64,
@@ -18,13 +19,15 @@ pub struct EditArgs {
     pub subject: Option<String>,
     pub silent: Option<bool>,
     pub reference: Option<String>,
+    pub cost: Option<Cost>,
+    pub occurrences: Vec<i64>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct EditReport {
     pub entry: Entry,
     pub merged_from: Vec<i64>,
-    pub changed: Vec<&'static str>,
+    pub changed: Vec<String>,
 }
 
 pub fn run(conn: &mut Connection, ctx: &Context, args: EditArgs) -> Result<EditReport> {
@@ -50,10 +53,15 @@ pub fn run(conn: &mut Connection, ctx: &Context, args: EditArgs) -> Result<EditR
     if let Some(silent) = args.silent {
         changes.push((Field::Silent, Some(silent.to_string())));
     }
-    if changes.is_empty() {
+    if !args.occurrences.is_empty() && args.cost.is_none() {
+        return Err(Error::usage(
+            "--occurrence names the occurrences whose cost changes; give --cost too",
+        ));
+    }
+    if changes.is_empty() && args.cost.is_none() {
         return Err(Error::usage(
             "nothing to change: give at least one of --symptom, --workaround, --hypothesis, \
-             --fix, --subject, --silent, --no-silent or --ref",
+             --fix, --subject, --silent, --no-silent, --ref or --cost",
         ));
     }
 
@@ -66,15 +74,56 @@ pub fn run(conn: &mut Connection, ctx: &Context, args: EditArgs) -> Result<EditR
             entry.id, entry.status, entry.id
         )));
     }
-    let changed = store::update_fields(&tx, &entry, &changes, &now)?;
+    let mut changed: Vec<String> = store::update_fields(&tx, &entry, &changes, &now)?
+        .into_iter()
+        .map(|field| field.column().to_owned())
+        .collect();
+    if let Some(cost) = args.cost {
+        let mut costs_changed = false;
+        for occurrence in occurrences_to_reclassify(&tx, entry.id, &args.occurrences)? {
+            if let Some(field) = store::set_occurrence_cost(&tx, &occurrence, cost, &now)? {
+                changed.push(field);
+                costs_changed = true;
+            }
+        }
+        if costs_changed {
+            store::touch(&tx, entry.id, &now)?;
+        }
+    }
     store::reindex(&tx, entry.id)?;
     let (entry, _) = store::resolve_entry(&tx, entry.id)?;
     tx.commit()?;
     Ok(EditReport {
         entry,
         merged_from,
-        changed: changed.into_iter().map(Field::column).collect(),
+        changed,
     })
+}
+
+fn occurrences_to_reclassify(
+    conn: &Connection,
+    entry_id: i64,
+    ids: &[i64],
+) -> Result<Vec<Occurrence>> {
+    if ids.is_empty() {
+        return store::occurrences(conn, entry_id);
+    }
+    let mut occurrences: Vec<Occurrence> = Vec::new();
+    for id in ids {
+        if occurrences.iter().any(|occurrence| occurrence.id == *id) {
+            continue;
+        }
+        let occurrence = store::find_occurrence(conn, *id)?
+            .ok_or_else(|| Error::NotFound(format!("no occurrence o{id}")))?;
+        if occurrence.entry_id != entry_id {
+            return Err(Error::usage(format!(
+                "o{id} belongs to entry {}, not {entry_id}",
+                occurrence.entry_id
+            )));
+        }
+        occurrences.push(occurrence);
+    }
+    Ok(occurrences)
 }
 
 impl Report for EditReport {
