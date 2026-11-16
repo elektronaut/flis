@@ -1,4 +1,5 @@
 mod common;
+mod delete;
 mod entries;
 mod export;
 mod git;

@@ -3,7 +3,7 @@
 A local CLI where coding agents record what slowed down development, look up known problems, and close them once fixed. One package: a library and a thin binary.
 
 - `src/cli.rs`: clap definitions, `--json` handling and exit codes. `snags add --help` is the field guidance agents read, so keep it complete.
-- `src/commands/`: one module per command (`add`, `seen`, `show`, `edit`, `resolve` with `reopen` and `accept`, `list`, `search`, `merge`, `split`, `stats`, `export`, `import`). Each returns a report that renders as text or JSON.
+- `src/commands/`: one module per command (`add`, `seen`, `show`, `edit`, `resolve` with `reopen` and `accept`, `list`, `search`, `merge`, `split`, `delete`, `stats`, `export`, `import`). Each returns a report that renders as text or JSON.
 - `src/db.rs`: database path, permissions, WAL, busy timeout and schema migrations through `PRAGMA user_version`.
 - `src/store.rs`: queries on entries, occurrences and `entry_history`, and the FTS rebuild.
 - `src/search.rs`: tokenising free text into quoted FTS5 terms and the all-words, then any-word search.

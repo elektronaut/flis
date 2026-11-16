@@ -30,6 +30,7 @@ For the review:
 snags accept <id> --note T
 snags merge <id>... --into <id>
 snags split <id> --occurrence <oid>... --symptom T
+snags delete [<id>...] [--occurrence <oid>...] [--project P...] [--dry-run]
 snags stats [--since D]
 snags export [--format md|json] [--status S] [--max-tokens N]
 snags import <file> [--dry-run] [--force] [--project-map FILE]
@@ -54,6 +55,11 @@ snags import <file> [--dry-run] [--force] [--project-map FILE]
   hidden from `list`, `search` and `stats`, and its id leads to the target.
   There is no undo; `split` moves occurrences out into a new entry and
   repairs a wrong merge.
+- `delete` removes entries with all their occurrences and history, single
+  occurrences, or every occurrence in a project (`--project`, matched
+  exactly), such as when moving a project's entries to another machine's log.
+  An entry left with no occurrences goes too, and so do the stubs merged into
+  a deleted entry. There is no undo; `--dry-run` shows what would go.
 - `stats` counts entries by status, project and subject, and the open
   entries reported upstream and waiting.
 - `export` writes complete entries with their occurrences in rank order and

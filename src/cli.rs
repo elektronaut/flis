@@ -6,6 +6,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::clock;
 use crate::commands::add::AddInput;
+use crate::commands::delete::DeleteArgs;
 use crate::commands::edit::EditArgs;
 use crate::commands::export::{ExportArgs, Format};
 use crate::commands::import::ImportArgs;
@@ -121,6 +122,17 @@ pub enum Command {
         (o117 or 117). The entry keeps at least one occurrence. Also repairs a wrong merge."
     )]
     Split(SplitArgs),
+    /// Delete entries, occurrences or every occurrence in a project, for good
+    #[command(
+        long_about = "Delete entries with all their occurrences and history, single occurrences \
+        (o117 or 117), or every occurrence recorded in a project, in any status. An entry left \
+        with no occurrences is deleted too, and so are the stubs merged into a deleted entry; an \
+        entry that keeps some occurrences is reindexed. Ids that were merged away lead to the \
+        entry they were merged into. An unknown id deletes nothing. There is no undo: run it \
+        with --dry-run first to see what would go. Meant for moving a project's entries to \
+        another machine's log, not for closing problems: use `resolve` or `accept` for that."
+    )]
+    Delete(DeleteCommand),
     /// Count entries by status, project and subject
     #[command(
         long_about = "Count entries by status, project and subject, and the open entries reported \
@@ -412,6 +424,22 @@ pub struct SplitArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct DeleteCommand {
+    /// Entries to delete with all their occurrences
+    #[arg(value_parser = parse_id, value_name = "ID")]
+    pub ids: Vec<i64>,
+    /// An occurrence to delete, such as o117; repeat it or give several
+    #[arg(long, num_args = 1.., value_parser = parse_occurrence_id, value_name = "OID")]
+    pub occurrence: Vec<i64>,
+    /// Delete every occurrence in this project, matched exactly; repeat it or give several
+    #[arg(long, num_args = 1.., value_name = "P")]
+    pub project: Vec<String>,
+    /// Report what would be deleted, and write nothing
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct StatsArgs {
     /// Only count occurrences since: 90d, 2w, 36h, a date (2026-08-01) or a timestamp
     #[arg(long, value_name = "D")]
@@ -640,6 +668,15 @@ fn dispatch(
             &args.occurrence,
             &args.symptom,
         )?),
+        Command::Delete(args) => {
+            let delete = DeleteArgs {
+                ids: &args.ids,
+                occurrences: &args.occurrence,
+                projects: &args.project,
+                dry_run: args.dry_run,
+            };
+            output(&commands::delete::run(conn, ctx, &delete)?)
+        }
         Command::Stats(args) => output(&commands::stats::run(conn, ctx, args.since.as_deref())?),
         Command::Export(args) => {
             let export = ExportArgs {

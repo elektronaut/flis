@@ -396,3 +396,35 @@ pub fn subjects(conn: &Connection) -> Result<Vec<(String, i64)>> {
     let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
+
+pub fn occurrences_in_project(conn: &Connection, project: &str) -> Result<Vec<Occurrence>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, entry_id, at, project, branch, cwd, agent, session, cost, note
+         FROM occurrences WHERE project = ?1 ORDER BY id",
+    )?;
+    let rows = stmt.query_map([project], occurrence_from_row)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The ids of the entries merged directly into `id`.
+pub fn merged_into(conn: &Connection, id: i64) -> Result<Vec<i64>> {
+    let mut stmt =
+        conn.prepare_cached("SELECT id FROM entries WHERE merged_into = ?1 ORDER BY id")?;
+    let rows = stmt.query_map([id], |row| row.get(0))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+pub fn delete_occurrence(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM occurrences WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+/// Deletes an entry with its occurrences, history and search row. Entries
+/// merged into it must be deleted first.
+pub fn delete_entry(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM occurrences WHERE entry_id = ?1", [id])?;
+    conn.execute("DELETE FROM entry_history WHERE entry_id = ?1", [id])?;
+    conn.execute("DELETE FROM entries_fts WHERE rowid = ?1", [id])?;
+    conn.execute("DELETE FROM entries WHERE id = ?1", [id])?;
+    Ok(())
+}
