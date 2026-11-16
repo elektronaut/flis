@@ -69,6 +69,25 @@ projects next to the disposition.
 Accepted entries are left out of the ranking. Occurrences still count, so
 an accepted entry that keeps coming back can be reconsidered.
 
+### Single occurrences
+
+Most entries are seen once, and they all score the same, so the score
+cannot order them. Rank them separately, below the entries that recurred:
+
+1. Cost of the one incident: silent, data loss, production impact or hours
+   lost first. Agents log nearly everything as minor, so judge it from the
+   text rather than the logged cost.
+2. Cost of the fix: a fix of a line or two in one of the user's own
+   repositories, verified as still needed, is cheaper to make than to keep
+   reviewing. Propose it as a fix now.
+3. Staleness: an entry seen once, more than 30 days ago, not silent and with
+   no `ref`, is proposed for `snags accept` as stale. Recurrences mostly come
+   within days, and a new occurrence brings an accepted entry back. Silent
+   entries are exempt: nobody notices them recur.
+
+Report the singles in these buckets: fix now, high cost, waiting or needing
+a reproduction, stale, and not yet 30 days old.
+
 ## 4. Verify before acting
 
 A logged cause is a hypothesis, written by an agent in the middle of
