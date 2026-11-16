@@ -76,7 +76,8 @@ cannot order them. Rank them separately, below the entries that recurred:
 
 1. Cost of the one incident: silent, data loss, production impact or hours
    lost first. Agents log nearly everything as minor, so judge it from the
-   text rather than the logged cost.
+   text, and reclassify a cost that is clearly wrong with
+   `snags edit <id> --cost <C> [--occurrence <oid>...]`.
 2. Cost of the fix: a fix of a line or two in one of the user's own
    repositories, verified as still needed, is cheaper to make than to keep
    reviewing. Propose it as a fix now.
